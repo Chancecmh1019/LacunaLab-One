@@ -388,7 +388,7 @@ const drawLyricFrame = (
     let cx = cv.x * width;
     let cy = cv.y * height;
     if (preset === 'cd-booklet' && !isVertical) {
-      const metadataStackHeight = 132;
+      const metadataStackHeight = 208;
       const groupTop = (height - (size + metadataStackHeight)) / 2;
       cx += Math.cos(absoluteTime * 0.32) * 2.5;
       cy = groupTop + size / 2 + Math.sin(absoluteTime * 0.42) * 3.5;
@@ -445,15 +445,18 @@ const drawLyricFrame = (
       ctx.fillStyle = '#fff';
       ctx.shadowColor = 'rgba(0,0,0,0.35)';
       ctx.shadowBlur = 6;
-      ctx.globalAlpha = 0.58;
-      ctx.font = `500 16px ${FONT_STACK}`;
-      ctx.fillText(project.metadata.album || '', metaCenterX, coverBottom + 46, size * 0.94);
+      ctx.globalAlpha = 0.72;
+      ctx.font = `600 24px ${FONT_STACK}`;
+      ctx.letterSpacing = '1.6px';
+      ctx.fillText(project.metadata.album || '', metaCenterX, coverBottom + 58, size * 0.94);
       ctx.globalAlpha = 0.98;
-      ctx.font = `800 30px ${FONT_STACK}`;
-      ctx.fillText(project.metadata.title || '', metaCenterX, coverBottom + 80, size * 0.94);
-      ctx.globalAlpha = 0.45;
-      ctx.font = `500 13px ${FONT_STACK}`;
-      ctx.fillText(`${project.metadata.artist || ''}  ·  ${project.metadata.language || 'KR'}`, metaCenterX, coverBottom + 108, size * 0.94);
+      ctx.font = `800 44px ${FONT_STACK}`;
+      ctx.letterSpacing = '0.8px';
+      ctx.fillText(project.metadata.title || '', metaCenterX, coverBottom + 116, size * 0.94);
+      ctx.globalAlpha = 0.64;
+      ctx.font = `600 22px ${FONT_STACK}`;
+      ctx.letterSpacing = '1.4px';
+      ctx.fillText(project.metadata.artist || '', metaCenterX, coverBottom + 169, size * 0.94);
       ctx.restore();
     }
   }
@@ -531,166 +534,102 @@ const drawLyricFrame = (
     glowColor: '#000', glowBlur: 0, fontWeight: '400', autoContrast: false
   };
 
-  // CD-Booklet adaptive three-line context. Current original + translation are never truncated.
+  // CD Booklet: current synchronized lyric group only, up to five lines on the full right panel.
   if (preset === 'cd-booklet' && !isVertical) {
-    const prevLine = currentIndex > 0 ? project.lyrics[currentIndex - 1] : null;
     const line = project.lyrics[currentIndex];
-    const nextLine = project.lyrics[currentIndex + 1] || null;
-    const lyricMaxWidth = Math.max(
-      280,
-      Math.min(width * 0.46, calculateMaxWidth(effectiveLayout.lyrics.x, effectiveLayout.lyrics.align) + 28)
-    );
-    const lyricAnchorY = effectiveLayout.lyrics.y * height;
-    const mainFontWeight = '700';
-    const mainTransWeight = '500';
-    const subFontWeight = '500';
-    const subTransWeight = '400';
-    const lineHeightMult = 1.34;
-    const lyricAreaTop = height * 0.105;
-    const lyricAreaBottom = height * 0.895;
-    const lyricAreaHeight = lyricAreaBottom - lyricAreaTop;
-    const preferredCenterY = Math.max(
-      lyricAreaTop + lyricAreaHeight * 0.32,
-      Math.min(lyricAreaBottom - lyricAreaHeight * 0.32, lyricAnchorY)
-    );
+    const logicalLines = Array.from(new Set([
+      ...(Array.isArray(line.multiLine) ? line.multiLine : []),
+      line.original || '',
+      line.romanization || '',
+      line.translation || ''
+    ].map(text => String(text || '').trim()).filter(Boolean))).slice(0, 5);
 
-    type BookletBlock = { h: number; org: string[]; trans: string[]; hasTranslation: boolean };
-    const hasAnyTranslation = [prevLine, line, nextLine].some(item => !!item?.translation?.trim());
+    if (logicalLines.length > 0) {
+      const panelLeft = Math.max(width * 0.545, effectiveLayout.lyrics.x * width);
+      const panelRight = width * 0.955;
+      const lyricMaxWidth = Math.max(320, panelRight - panelLeft);
+      const lyricAreaTop = height * 0.11;
+      const lyricAreaBottom = height * 0.89;
+      const lyricAreaHeight = lyricAreaBottom - lyricAreaTop;
+      const requestedCenterY = effectiveLayout.lyrics.y * height;
+      const centerY = Math.max(
+        lyricAreaTop + lyricAreaHeight * 0.22,
+        Math.min(lyricAreaBottom - lyricAreaHeight * 0.22, requestedCenterY)
+      );
 
-    const buildMetrics = (fitFactor: number, showContextTranslation: boolean, compactContext: boolean, showContextLines = true) => {
-      const mainFontSize = (hasAnyTranslation ? 48 : 56) * baseScale * fitFactor;
-      const mainTransSize = 38 * baseScale * fitFactor;
-      const subFontSize = (hasAnyTranslation ? 31 : 37) * baseScale * fitFactor;
-      const subTransSize = 25 * baseScale * fitFactor;
-      const lineGap = Math.max(5, 7 * baseScale * fitFactor);
-      const sectionGap = Math.max(18, 29 * baseScale * fitFactor);
-
-      const measureBlock = (item: typeof line | null, isMain: boolean): BookletBlock => {
-        if (!item) return { h: 0, org: [], trans: [], hasTranslation: false };
-        const fSize = isMain ? mainFontSize : subFontSize;
-        const tSize = isMain ? mainTransSize : subTransSize;
-        ctx.font = `${isMain ? mainFontWeight : subFontWeight} ${fSize}px ${FONT_STACK}`;
-        let org = wrapText(ctx, item.original || '', lyricMaxWidth);
-        if (!isMain && compactContext && org.length > 2) org = org.slice(0, 2);
-        const hasTranslation = !!item.translation?.trim();
-        let trans: string[] = [];
-        if (hasTranslation && (isMain || showContextTranslation)) {
-          ctx.font = `${isMain ? mainTransWeight : subTransWeight} ${tSize}px ${FONT_STACK}`;
-          trans = wrapText(ctx, item.translation, lyricMaxWidth);
-          if (!isMain && compactContext && trans.length > 1) trans = trans.slice(0, 1);
-        }
-        const h = org.length * fSize * lineHeightMult + (trans.length ? lineGap : 0) + trans.length * tSize * lineHeightMult;
-        return { h, org, trans, hasTranslation };
+      type BookletRow = {
+        wrapped: string[];
+        fontSize: number;
+        lineHeight: number;
+        alpha: number;
+        weight: string;
       };
 
-      const prevBlock = measureBlock(showContextLines ? prevLine : null, false);
-      const mainBlock = measureBlock(line, true);
-      const nextBlock = measureBlock(showContextLines ? nextLine : null, false);
-      const totalHeight = prevBlock.h + (prevBlock.h ? sectionGap : 0) + mainBlock.h + (nextBlock.h ? sectionGap : 0) + nextBlock.h;
-      return { mainFontSize, mainTransSize, subFontSize, subTransSize, lineGap, sectionGap, prevBlock, mainBlock, nextBlock, totalHeight };
-    };
+      const buildRows = (fitFactor: number) => {
+        const rows: BookletRow[] = logicalLines.map((text, index) => {
+          const isPrimary = index === 0;
+          const preferredSize = (isPrimary ? 62 : 47) * baseScale * fitFactor;
+          const fontSize = Math.min(isPrimary ? 68 : 53, preferredSize);
+          const weight = isPrimary ? '750' : '550';
+          ctx.font = `${weight} ${fontSize}px ${FONT_STACK}`;
+          return {
+            wrapped: wrapText(ctx, text, lyricMaxWidth),
+            fontSize,
+            lineHeight: fontSize * 1.32,
+            alpha: isPrimary ? 1 : 0.82,
+            weight
+          };
+        });
+        const rowGap = Math.max(10, 14 * baseScale * fitFactor);
+        const totalHeight = rows.reduce((sum, row) => sum + row.wrapped.length * row.lineHeight, 0)
+          + Math.max(0, rows.length - 1) * rowGap;
+        return { rows, rowGap, totalHeight };
+      };
 
-    let fitFactor = 1;
-    let showContextTranslation = true;
-    let compactContext = false;
-    let showContextLines = true;
-    let metrics = buildMetrics(fitFactor, showContextTranslation, compactContext, showContextLines);
-    const targetHeight = lyricAreaHeight * 0.94;
-    for (let n = 0; n < 8 && metrics.totalHeight > targetHeight && fitFactor > 0.66; n++) {
-      const ratio = targetHeight / metrics.totalHeight;
-      fitFactor = Math.max(0.66, fitFactor * Math.max(0.86, Math.min(0.96, ratio * 0.985)));
-      metrics = buildMetrics(fitFactor, showContextTranslation, compactContext, showContextLines);
-    }
-    if (metrics.totalHeight > targetHeight) {
-      showContextTranslation = false;
-      metrics = buildMetrics(fitFactor, showContextTranslation, compactContext, showContextLines);
-    }
-    if (metrics.totalHeight > targetHeight) {
-      compactContext = true;
-      metrics = buildMetrics(fitFactor, showContextTranslation, compactContext, showContextLines);
-    }
-    for (let n = 0; n < 6 && metrics.totalHeight > targetHeight && fitFactor > 0.56; n++) {
-      fitFactor = Math.max(0.56, fitFactor * 0.92);
-      metrics = buildMetrics(fitFactor, showContextTranslation, compactContext, showContextLines);
-    }
-    if (metrics.totalHeight > targetHeight) {
-      showContextLines = false;
-      metrics = buildMetrics(fitFactor, showContextTranslation, compactContext, showContextLines);
-    }
-    for (let n = 0; n < 8 && metrics.totalHeight > targetHeight && fitFactor > 0.30; n++) {
-      const ratio = targetHeight / metrics.totalHeight;
-      fitFactor = Math.max(0.30, fitFactor * Math.max(0.78, Math.min(0.92, ratio * 0.98)));
-      metrics = buildMetrics(fitFactor, showContextTranslation, compactContext, showContextLines);
-    }
-    if (metrics.totalHeight > targetHeight) {
-      const ratio = targetHeight / metrics.totalHeight;
-      fitFactor = Math.max(0.22, fitFactor * ratio * 0.975);
-      metrics = buildMetrics(fitFactor, showContextTranslation, compactContext, showContextLines);
-    }
-
-    let cursorY = preferredCenterY - metrics.totalHeight / 2;
-    cursorY = Math.max(lyricAreaTop, Math.min(cursorY, lyricAreaBottom - metrics.totalHeight));
-    const start = line.timestamp;
-    const end = getLineEndTime(currentIndex);
-    const since = effectiveTime - start;
-    const until = end - effectiveTime;
-    let mainAlpha = 1;
-    if (since < 0.3) mainAlpha = since / 0.3;
-    const isLast = currentIndex === project.lyrics.length - 1;
-    const fadeOut = isLast ? 1.5 : 0.4;
-    if (until < fadeOut) mainAlpha = Math.min(mainAlpha, until / fadeOut);
-    mainAlpha = Math.max(0, Math.min(1, mainAlpha));
-    ctx.textAlign = effectiveLayout.lyrics.align;
-
-    const edgeFade = (y: number) => {
-      const zone = 44;
-      if (y < lyricAreaTop + zone) return Math.max(0.18, (y - lyricAreaTop) / zone);
-      if (y > lyricAreaBottom - zone) return Math.max(0.18, (lyricAreaBottom - y) / zone);
-      return 1;
-    };
-
-    const drawBlock = (
-      block: BookletBlock, fSize: number, tSize: number, alpha: number, isMain: boolean, phase: number
-    ) => {
-      if (!block.h) return;
-      const floatY = Math.sin(absoluteTime * (isMain ? 0.72 : 0.54) + phase) * (isMain ? 2.2 : 1.2);
-      for (const textLine of block.org) {
-        const y = cursorY + fSize;
-        ctx.save();
-        ctx.globalAlpha = alpha * edgeFade(y);
-        ctx.shadowColor = `rgba(0,0,0,${isMain ? shadowIntensity : shadowIntensity * 0.65})`;
-        ctx.shadowBlur = isMain ? 12 * shadowIntensity : 7 * shadowIntensity;
-        ctx.font = `${isMain ? mainFontWeight : subFontWeight} ${fSize}px ${FONT_STACK}`;
-        ctx.fillStyle = isMain ? style.textColor : '#fff';
-        ctx.fillText(textLine, lyricX, y + floatY, lyricMaxWidth);
-        ctx.restore();
-        cursorY += fSize * lineHeightMult;
+      let fitFactor = 1;
+      let metrics = buildRows(fitFactor);
+      const targetHeight = lyricAreaHeight * 0.90;
+      for (let i = 0; i < 12 && metrics.totalHeight > targetHeight && fitFactor > 0.58; i++) {
+        const ratio = targetHeight / metrics.totalHeight;
+        fitFactor = Math.max(0.58, fitFactor * Math.max(0.84, Math.min(0.96, ratio * 0.99)));
+        metrics = buildRows(fitFactor);
       }
-      if (block.trans.length) {
-        cursorY += metrics.lineGap;
-        for (const textLine of block.trans) {
-          const y = cursorY + tSize;
+      if (metrics.totalHeight > targetHeight) {
+        fitFactor = Math.max(0.46, fitFactor * targetHeight / metrics.totalHeight);
+        metrics = buildRows(fitFactor);
+      }
+
+      const end = getLineEndTime(currentIndex);
+      const since = effectiveTime - line.timestamp;
+      const until = end - effectiveTime;
+      let groupAlpha = 1;
+      if (since < 0.28) groupAlpha = since / 0.28;
+      const isLast = currentIndex === project.lyrics.length - 1;
+      const fadeOut = isLast ? 1.5 : 0.4;
+      if (until < fadeOut) groupAlpha = Math.min(groupAlpha, until / fadeOut);
+      groupAlpha = Math.max(0, Math.min(1, groupAlpha));
+
+      let cursorY = centerY - metrics.totalHeight / 2;
+      cursorY = Math.max(lyricAreaTop, Math.min(cursorY, lyricAreaBottom - metrics.totalHeight));
+      const floatY = Math.sin(absoluteTime * 0.7) * 1.8;
+
+      ctx.textAlign = 'left';
+      ctx.letterSpacing = '0px';
+      metrics.rows.forEach((row, rowIndex) => {
+        row.wrapped.forEach(textLine => {
+          const baselineY = cursorY + row.fontSize;
           ctx.save();
-          ctx.globalAlpha = (isMain ? alpha * 0.72 : alpha * 0.55) * edgeFade(y);
-          ctx.shadowColor = `rgba(0,0,0,${shadowIntensity * 0.45})`;
-          ctx.shadowBlur = 6 * shadowIntensity;
-          ctx.font = `${isMain ? mainTransWeight : subTransWeight} ${tSize}px ${FONT_STACK}`;
-          ctx.fillStyle = '#fff';
-          ctx.fillText(textLine, lyricX, y + floatY, lyricMaxWidth);
+          ctx.globalAlpha = groupAlpha * row.alpha;
+          ctx.shadowColor = `rgba(0,0,0,${shadowIntensity})`;
+          ctx.shadowBlur = rowIndex === 0 ? 12 * shadowIntensity : 8 * shadowIntensity;
+          ctx.font = `${row.weight} ${row.fontSize}px ${FONT_STACK}`;
+          ctx.fillStyle = rowIndex === 0 ? style.textColor : '#ffffff';
+          ctx.fillText(textLine, panelLeft, baselineY + floatY, lyricMaxWidth);
           ctx.restore();
-          cursorY += tSize * lineHeightMult;
-        }
-      }
-    };
-
-    if (showContextLines && prevLine) {
-      drawBlock(metrics.prevBlock, metrics.subFontSize, metrics.subTransSize, isLast ? 0.24 * mainAlpha : 0.24, false, 0.8);
-      cursorY += metrics.sectionGap;
-    }
-    drawBlock(metrics.mainBlock, metrics.mainFontSize, metrics.mainTransSize, mainAlpha, true, 0);
-    if (showContextLines && nextLine) {
-      cursorY += metrics.sectionGap;
-      drawBlock(metrics.nextBlock, metrics.subFontSize, metrics.subTransSize, 0.24, false, 1.6);
+          cursorY += row.lineHeight;
+        });
+        if (rowIndex < metrics.rows.length - 1) cursorY += metrics.rowGap;
+      });
     }
     return;
   }
