@@ -8,7 +8,14 @@ import { wrapText, drawRoundedRect, getContrastColor } from '../utils/canvasUtil
 import { LAYOUT_PRESETS, FONT_STACK } from '../utils/layoutPresets';
 import { getLanguageLabel, detectLanguageFromLyrics } from '../utils/languageDetector';
 import { useRenderQueue } from '../contexts/RenderQueueContext';
-import { buildOutputFileName } from '../utils/outputFilename';
+const buildLyricVideoOutputName = (artist: string, title: string, extension: string) => {
+  const sanitize = (value: string, fallback: string) =>
+    (value || fallback).trim().replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ') || fallback;
+  const cleanArtist = sanitize(artist, 'Unknown Artist');
+  const cleanTitle = sanitize(title, '未命名');
+  const cleanExtension = extension.replace(/^\./, '').trim() || 'mp4';
+  return `${cleanArtist} - ${cleanTitle}｜繁體中字翻譯.${cleanExtension}`;
+};
 
 // ... (Keep existing Type Declarations for VideoEncoder/AudioEncoder/etc) ...
 declare class VideoEncoder {
@@ -979,8 +986,10 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
             const lyricAreaTop = height * 0.105;
             const lyricAreaBottom = height * 0.895;
 
-            const fixedFontSize = 40 * baseScale;
-            const lineHeight = fixedFontSize * 1.30;
+            const originalFontSize = 40 * baseScale;
+            const translationFontSize = Math.max(12 * baseScale, originalFontSize - 7 * baseScale);
+            const originalLineHeight = originalFontSize * 1.30;
+            const translationLineHeight = translationFontSize * 1.30;
             const translationGap = Math.max(16, 20 * baseScale);
             const sectionGap = Math.max(34, 44 * baseScale);
             const originalWeight = '600';
@@ -988,8 +997,8 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
 
             const requestedCenterY = effectiveLayout.lyrics.y * height;
             const centerY = Math.max(
-                lyricAreaTop + fixedFontSize * 1.6,
-                Math.min(lyricAreaBottom - fixedFontSize * 1.6, requestedCenterY)
+                lyricAreaTop + originalFontSize * 1.6,
+                Math.min(lyricAreaBottom - originalFontSize * 1.6, requestedCenterY)
             );
 
             const getOriginal = (lyric: any): string => {
@@ -1023,16 +1032,16 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
                 const original = getOriginal(lyric);
                 const translation = getTranslation(lyric, original);
 
-                ctx.font = `${originalWeight} ${fixedFontSize}px ${FONT_STACK}`;
+                ctx.font = `${originalWeight} ${originalFontSize}px ${FONT_STACK}`;
                 const originalLines = original ? wrapText(ctx, original, lyricMaxWidth) : [];
 
-                ctx.font = `${translationWeight} ${fixedFontSize}px ${FONT_STACK}`;
+                ctx.font = `${translationWeight} ${translationFontSize}px ${FONT_STACK}`;
                 const translationLines = translation ? wrapText(ctx, translation, lyricMaxWidth) : [];
 
                 const height =
-                    originalLines.length * lineHeight +
+                    originalLines.length * originalLineHeight +
                     (translationLines.length > 0 && originalLines.length > 0 ? translationGap : 0) +
-                    translationLines.length * lineHeight;
+                    translationLines.length * translationLineHeight;
 
                 return { offset, originalLines, translationLines, height };
             });
@@ -1074,13 +1083,13 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
             mainAlpha = Math.max(0, Math.min(1, mainAlpha));
 
             // 欄位邊緣效果：越接近上下邊界越淡、越模糊；真正超出欄位就裁掉。
-            const getEdgeEffect = (baselineY: number) => {
-                const visualCenterY = baselineY - fixedFontSize * 0.35;
+            const getEdgeEffect = (baselineY: number, fontSize: number) => {
+                const visualCenterY = baselineY - fontSize * 0.35;
                 const distanceToEdge = Math.min(
                     visualCenterY - lyricAreaTop,
                     lyricAreaBottom - visualCenterY
                 );
-                const fadeZone = Math.max(56, fixedFontSize * 1.75);
+                const fadeZone = Math.max(56, fontSize * 1.75);
                 const t = Math.max(0, Math.min(1, distanceToEdge / fadeZone));
                 const fade = t * t * (3 - 2 * t);
                 const blur = (1 - fade) * Math.max(7, 8 * baseScale);
@@ -1093,9 +1102,10 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
                 baseAlpha: number,
                 weight: string,
                 isCurrent: boolean,
-                isTranslation: boolean
+                isTranslation: boolean,
+                fontSize: number
             ) => {
-                const { fade, blur } = getEdgeEffect(baselineY);
+                const { fade, blur } = getEdgeEffect(baselineY, fontSize);
                 if (fade <= 0.002) return;
 
                 ctx.save();
@@ -1104,7 +1114,7 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
                 ctx.clip();
                 ctx.globalAlpha = baseAlpha * fade * (isTranslation ? 0.76 : 1);
                 ctx.filter = blur > 0.35 ? `blur(${blur.toFixed(2)}px)` : 'none';
-                ctx.font = `${weight} ${fixedFontSize}px ${FONT_STACK}`;
+                ctx.font = `${weight} ${fontSize}px ${FONT_STACK}`;
                 ctx.fillStyle = isCurrent && !isTranslation ? style.textColor : '#ffffff';
                 ctx.shadowColor = `rgba(0,0,0,${isCurrent ? shadowIntensity : shadowIntensity * 0.62})`;
                 ctx.shadowBlur = isCurrent ? 12 * shadowIntensity : 7 * shadowIntensity;
@@ -1131,17 +1141,17 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
                 let cursorY = top;
 
                 row.originalLines.forEach(textLine => {
-                    const baselineY = cursorY + fixedFontSize;
-                    drawTextLine(textLine, baselineY, alpha, originalWeight, isCurrent, false);
-                    cursorY += lineHeight;
+                    const baselineY = cursorY + originalFontSize;
+                    drawTextLine(textLine, baselineY, alpha, originalWeight, isCurrent, false, originalFontSize);
+                    cursorY += originalLineHeight;
                 });
 
                 if (row.translationLines.length > 0) {
                     if (row.originalLines.length > 0) cursorY += translationGap;
                     row.translationLines.forEach(textLine => {
-                        const baselineY = cursorY + fixedFontSize;
-                        drawTextLine(textLine, baselineY, alpha, translationWeight, isCurrent, true);
-                        cursorY += lineHeight;
+                        const baselineY = cursorY + translationFontSize;
+                        drawTextLine(textLine, baselineY, alpha, translationWeight, isCurrent, true, translationFontSize);
+                        cursorY += translationLineHeight;
                     });
                 }
             });
@@ -1548,7 +1558,7 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a'); 
             a.href = url; 
-            a.download = buildOutputFileName(project.metadata.artist, project.metadata.title, ext);
+            a.download = buildLyricVideoOutputName(project.metadata.artist, project.metadata.title, ext);
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             setIsExporting(false); setExportProgress(0); setIsPlaying(false);
         };
