@@ -535,36 +535,27 @@ const drawLyricFrame = (
     glowColor: '#000', glowBlur: 0, fontWeight: '400', autoContrast: false
   };
 
-  // CD Booklet: fixed five-line lyric window (previous 2 / current / next 2).
-  // The five Y positions never translate or float. At a lyric change we only replace
-  // the text in those fixed slots; the top edge fades out and the bottom edge fades in.
+  // CD Booklet: preserve the original three-line behavior, expanded to five fixed lyric groups.
+  // Only the current (third) group fades in/out. The four context groups stay dim and never move.
+  // Every group uses the same font size, with original above translation.
   if (preset === 'cd-booklet' && !isVertical) {
-    const panelLeft = Math.max(width * 0.525, effectiveLayout.lyrics.x * width);
+    const panelLeft = effectiveLayout.lyrics.x * width;
     const panelRight = width * 0.955;
     const lyricMaxWidth = Math.max(320, panelRight - panelLeft);
-    const lyricAreaTop = height * 0.105;
-    const lyricAreaBottom = height * 0.895;
+    const lyricAreaTop = height * 0.085;
+    const lyricAreaBottom = height * 0.915;
     const requestedCenterY = effectiveLayout.lyrics.y * height;
     const centerY = Math.max(
-      lyricAreaTop + height * 0.28,
-      Math.min(lyricAreaBottom - height * 0.28, requestedCenterY)
+      lyricAreaTop + height * 0.32,
+      Math.min(lyricAreaBottom - height * 0.32, requestedCenterY)
     );
 
-    const slotGap = Math.min(height * 0.14, 124 * baseScale);
     const slotOffsets = [-2, -1, 0, 1, 2];
-    const slotBaseAlpha = [0.22, 0.58, 1, 0.58, 0.22];
-    const slotBaseSize = [42, 48, 58, 48, 42];
-    const slotWeight = ['500', '600', '750', '600', '500'];
+    const slotGap = Math.min(height * 0.145, 156 * baseScale);
+    const originalWeight = '600';
+    const translationWeight = '400';
 
-    const currentLine = project.lyrics[currentIndex];
-    const currentEnd = getLineEndTime(currentIndex);
-    const sinceStart = Math.max(0, effectiveTime - currentLine.timestamp);
-    const untilEnd = Math.max(0, currentEnd - effectiveTime);
-    const edgeFadeDuration = 0.42;
-    const bottomEdgeIn = Math.max(0, Math.min(1, sinceStart / edgeFadeDuration));
-    const topEdgeOut = Math.max(0, Math.min(1, untilEnd / edgeFadeDuration));
-
-    const getBookletText = (lyric: any): string => {
+    const getOriginal = (lyric: any): string => {
       if (!lyric) return '';
       const original = String(lyric.original || '').trim();
       if (original) return original;
@@ -572,50 +563,91 @@ const drawLyricFrame = (
         const first = lyric.multiLine.find((part: unknown) => String(part || '').trim());
         if (first) return String(first).trim();
       }
-      return String(lyric.translation || lyric.romanization || '').trim();
+      return '';
     };
 
-    const fitFontSize = (text: string, desiredSize: number, weight: string) => {
-      let fontSize = desiredSize;
-      ctx.font = `${weight} ${fontSize}px ${FONT_STACK}`;
-      const measured = ctx.measureText(text).width;
-      if (measured > lyricMaxWidth && measured > 0) {
-        fontSize *= (lyricMaxWidth / measured) * 0.98;
-      }
-      return Math.max(30, fontSize);
+    const getTranslation = (lyric: any, original: string): string => {
+      if (!lyric) return '';
+      const translation = String(lyric.translation || '').trim();
+      if (!translation || translation === original) return '';
+      return translation;
     };
+
+    const visibleRows = slotOffsets.map(offset => {
+      const lyric = project.lyrics[currentIndex + offset];
+      const original = getOriginal(lyric);
+      const translation = getTranslation(lyric, original);
+      return { lyric, original, translation };
+    });
+
+    // One shared size for all five groups, including translations.
+    const desiredFontSize = 40 * baseScale;
+    let sharedFontSize = desiredFontSize;
+    const allTexts = visibleRows.flatMap(row => [row.original, row.translation]).filter(Boolean);
+    allTexts.forEach(value => {
+      ctx.font = `${originalWeight} ${desiredFontSize}px ${FONT_STACK}`;
+      const measured = ctx.measureText(value).width;
+      if (measured > lyricMaxWidth && measured > 0) {
+        sharedFontSize = Math.min(sharedFontSize, desiredFontSize * lyricMaxWidth / measured * 0.985);
+      }
+    });
+    sharedFontSize = Math.max(27 * baseScale, Math.min(44 * baseScale, sharedFontSize));
+
+    // Original fade rule: only the current lyric flashes/fades at its own boundaries.
+    const currentLine = project.lyrics[currentIndex];
+    const end = getLineEndTime(currentIndex);
+    const since = effectiveTime - currentLine.timestamp;
+    const until = end - effectiveTime;
+    let mainAlpha = 1;
+    if (since < 0.3) mainAlpha = since / 0.3;
+    const isLast = currentIndex === project.lyrics.length - 1;
+    const fadeOut = isLast ? 1.5 : 0.4;
+    if (until < fadeOut) mainAlpha = Math.min(mainAlpha, until / fadeOut);
+    mainAlpha = Math.max(0, Math.min(1, mainAlpha));
 
     ctx.textAlign = 'left';
     ctx.letterSpacing = '0px';
 
-    slotOffsets.forEach((offset, slotIndex) => {
-      const lyricIndex = currentIndex + offset;
-      const lyric = project.lyrics[lyricIndex];
-      const text = getBookletText(lyric);
-      if (!text) return;
+    visibleRows.forEach((row, slotIndex) => {
+      if (!row.original && !row.translation) return;
+      const offset = slotOffsets[slotIndex];
+      const slotCenterY = centerY + offset * slotGap;
+      const isCurrent = offset === 0;
+      // Only the current lyric fades. Outer context is statically lighter.
+      const contextAlpha = Math.abs(offset) === 2 ? 0.12 : 0.26;
+      const alpha = isCurrent ? mainAlpha : contextAlpha;
+      const hasTranslation = !!row.translation;
+      const originalY = hasTranslation
+        ? slotCenterY - sharedFontSize * 0.22
+        : slotCenterY + sharedFontSize * 0.30;
+      const translationY = slotCenterY + sharedFontSize * 0.92;
 
-      let alpha = slotBaseAlpha[slotIndex];
-      if (slotIndex === 0) alpha *= topEdgeOut;
-      if (slotIndex === 4) alpha *= bottomEdgeIn;
-
-      const desiredSize = slotBaseSize[slotIndex] * baseScale;
-      const weight = slotWeight[slotIndex];
-      const fontSize = fitFontSize(text, desiredSize, weight);
-      const y = centerY + offset * slotGap;
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.font = `${weight} ${fontSize}px ${FONT_STACK}`;
-      ctx.fillStyle = slotIndex === 2 ? style.textColor : '#ffffff';
-      ctx.shadowColor = `rgba(0,0,0,${shadowIntensity})`;
-      ctx.shadowBlur = slotIndex === 2 ? 12 * shadowIntensity : (slotIndex === 1 || slotIndex === 3 ? 7 : 4) * shadowIntensity;
-      if (style.strokeWidth > 0 && slotIndex === 2) {
-        ctx.strokeStyle = style.strokeColor;
-        ctx.lineWidth = style.strokeWidth;
-        ctx.strokeText(text, panelLeft, y, lyricMaxWidth);
+      if (row.original) {
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.font = `${originalWeight} ${sharedFontSize}px ${FONT_STACK}`;
+        ctx.fillStyle = isCurrent ? style.textColor : '#fff';
+        ctx.shadowColor = `rgba(0,0,0,${isCurrent ? shadowIntensity : shadowIntensity * 0.65})`;
+        ctx.shadowBlur = isCurrent ? 12 * shadowIntensity : 7 * shadowIntensity;
+        if (style.strokeWidth > 0 && isCurrent) {
+          ctx.strokeStyle = style.strokeColor;
+          ctx.lineWidth = style.strokeWidth;
+          ctx.strokeText(row.original, panelLeft, originalY, lyricMaxWidth);
+        }
+        ctx.fillText(row.original, panelLeft, originalY, lyricMaxWidth);
+        ctx.restore();
       }
-      ctx.fillText(text, panelLeft, y, lyricMaxWidth);
-      ctx.restore();
+
+      if (row.translation) {
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.72;
+        ctx.font = `${translationWeight} ${sharedFontSize}px ${FONT_STACK}`;
+        ctx.fillStyle = '#fff';
+        ctx.shadowColor = `rgba(0,0,0,${shadowIntensity * 0.45})`;
+        ctx.shadowBlur = 6 * shadowIntensity;
+        ctx.fillText(row.translation, panelLeft, translationY, lyricMaxWidth);
+        ctx.restore();
+      }
     });
     return;
   }
