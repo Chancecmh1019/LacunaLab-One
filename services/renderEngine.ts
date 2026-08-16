@@ -535,25 +535,30 @@ const drawLyricFrame = (
     glowColor: '#000', glowBlur: 0, fontWeight: '400', autoContrast: false
   };
 
-  // CD Booklet: preserve the original three-line behavior, expanded to five fixed lyric groups.
-  // Only the current (third) group fades in/out. The four context groups stay dim and never move.
-  // Every group uses the same font size, with original above translation.
+  // CD Booklet: keep the original lyric behavior, expanded to five lyric groups.
+  // All five groups use one fixed font size. Long text wraps instead of shrinking the song's subtitles.
+  // Original is above translation; only the current lyric uses the original mainAlpha fade.
+  // Content near/outside the top and bottom of the lyric field fades and blurs at the edges.
   if (preset === 'cd-booklet' && !isVertical) {
-    const panelLeft = effectiveLayout.lyrics.x * width;
-    const panelRight = width * 0.955;
+    // Shift only the rendered lyric column slightly right; leave the saved layout untouched.
+    const panelLeft = effectiveLayout.lyrics.x * width + width * 0.016;
+    const panelRight = width * 0.965;
     const lyricMaxWidth = Math.max(320, panelRight - panelLeft);
-    const lyricAreaTop = height * 0.085;
-    const lyricAreaBottom = height * 0.915;
-    const requestedCenterY = effectiveLayout.lyrics.y * height;
-    const centerY = Math.max(
-      lyricAreaTop + height * 0.32,
-      Math.min(lyricAreaBottom - height * 0.32, requestedCenterY)
-    );
+    const lyricAreaTop = height * 0.105;
+    const lyricAreaBottom = height * 0.895;
 
-    const slotOffsets = [-2, -1, 0, 1, 2];
-    const slotGap = Math.min(height * 0.145, 156 * baseScale);
+    const fixedFontSize = 40 * baseScale;
+    const lineHeight = fixedFontSize * 1.30;
+    const translationGap = Math.max(16, 20 * baseScale);
+    const sectionGap = Math.max(20, 26 * baseScale);
     const originalWeight = '600';
     const translationWeight = '400';
+
+    const requestedCenterY = effectiveLayout.lyrics.y * height;
+    const centerY = Math.max(
+      lyricAreaTop + fixedFontSize * 1.6,
+      Math.min(lyricAreaBottom - fixedFontSize * 1.6, requestedCenterY)
+    );
 
     const getOriginal = (lyric: any): string => {
       if (!lyric) return '';
@@ -573,27 +578,57 @@ const drawLyricFrame = (
       return translation;
     };
 
-    const visibleRows = slotOffsets.map(offset => {
+    type BookletRow = {
+      offset: number;
+      originalLines: string[];
+      translationLines: string[];
+      height: number;
+    };
+
+    const slotOffsets = [-2, -1, 0, 1, 2];
+    const rows: BookletRow[] = slotOffsets.map(offset => {
       const lyric = project.lyrics[currentIndex + offset];
       const original = getOriginal(lyric);
       const translation = getTranslation(lyric, original);
-      return { lyric, original, translation };
+
+      ctx.font = `${originalWeight} ${fixedFontSize}px ${FONT_STACK}`;
+      const originalLines = original ? wrapText(ctx, original, lyricMaxWidth) : [];
+
+      ctx.font = `${translationWeight} ${fixedFontSize}px ${FONT_STACK}`;
+      const translationLines = translation ? wrapText(ctx, translation, lyricMaxWidth) : [];
+
+      const height =
+        originalLines.length * lineHeight +
+        (translationLines.length > 0 && originalLines.length > 0 ? translationGap : 0) +
+        translationLines.length * lineHeight;
+
+      return { offset, originalLines, translationLines, height };
     });
 
-    // One shared size for all five groups, including translations.
-    const desiredFontSize = 40 * baseScale;
-    let sharedFontSize = desiredFontSize;
-    const allTexts = visibleRows.flatMap(row => [row.original, row.translation]).filter(Boolean);
-    allTexts.forEach(value => {
-      ctx.font = `${originalWeight} ${desiredFontSize}px ${FONT_STACK}`;
-      const measured = ctx.measureText(value).width;
-      if (measured > lyricMaxWidth && measured > 0) {
-        sharedFontSize = Math.min(sharedFontSize, desiredFontSize * lyricMaxWidth / measured * 0.985);
-      }
-    });
-    sharedFontSize = Math.max(27 * baseScale, Math.min(44 * baseScale, sharedFontSize));
+    // Keep the current lyric centered. Context lyrics stack above/below without any movement animation.
+    const rowTop = new Map<number, number>();
+    const currentRow = rows[2];
+    const currentTop = centerY - currentRow.height / 2;
+    rowTop.set(0, currentTop);
 
-    // Original fade rule: only the current lyric flashes/fades at its own boundaries.
+    let upperCursor = currentTop;
+    for (let i = 1; i <= 2; i++) {
+      const row = rows[2 - i];
+      if (!row || row.height <= 0) continue;
+      upperCursor -= sectionGap + row.height;
+      rowTop.set(row.offset, upperCursor);
+    }
+
+    let lowerCursor = currentTop + currentRow.height;
+    for (let i = 1; i <= 2; i++) {
+      const row = rows[2 + i];
+      if (!row || row.height <= 0) continue;
+      lowerCursor += sectionGap;
+      rowTop.set(row.offset, lowerCursor);
+      lowerCursor += row.height;
+    }
+
+    // Original rule: only the current lyric fades at its own start/end.
     const currentLine = project.lyrics[currentIndex];
     const end = getLineEndTime(currentIndex);
     const since = effectiveTime - currentLine.timestamp;
@@ -605,48 +640,75 @@ const drawLyricFrame = (
     if (until < fadeOut) mainAlpha = Math.min(mainAlpha, until / fadeOut);
     mainAlpha = Math.max(0, Math.min(1, mainAlpha));
 
+    const getEdgeEffect = (baselineY: number) => {
+      const visualCenterY = baselineY - fixedFontSize * 0.35;
+      const distanceToEdge = Math.min(
+        visualCenterY - lyricAreaTop,
+        lyricAreaBottom - visualCenterY
+      );
+      const fadeZone = Math.max(56, fixedFontSize * 1.75);
+      const t = Math.max(0, Math.min(1, distanceToEdge / fadeZone));
+      const fade = t * t * (3 - 2 * t);
+      const blur = (1 - fade) * Math.max(7, 8 * baseScale);
+      return { fade, blur };
+    };
+
+    const drawTextLine = (
+      value: string,
+      baselineY: number,
+      baseAlpha: number,
+      weight: string,
+      isCurrent: boolean,
+      isTranslation: boolean
+    ) => {
+      const { fade, blur } = getEdgeEffect(baselineY);
+      if (fade <= 0.002) return;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(panelLeft - 20, lyricAreaTop, lyricMaxWidth + 40, lyricAreaBottom - lyricAreaTop);
+      ctx.clip();
+      ctx.globalAlpha = baseAlpha * fade * (isTranslation ? 0.76 : 1);
+      ctx.filter = blur > 0.35 ? `blur(${blur.toFixed(2)}px)` : 'none';
+      ctx.font = `${weight} ${fixedFontSize}px ${FONT_STACK}`;
+      ctx.fillStyle = isCurrent && !isTranslation ? style.textColor : '#fff';
+      ctx.shadowColor = `rgba(0,0,0,${isCurrent ? shadowIntensity : shadowIntensity * 0.62})`;
+      ctx.shadowBlur = isCurrent ? 12 * shadowIntensity : 7 * shadowIntensity;
+
+      if (style.strokeWidth > 0 && isCurrent && !isTranslation) {
+        ctx.strokeStyle = style.strokeColor;
+        ctx.lineWidth = style.strokeWidth;
+        ctx.strokeText(value, panelLeft, baselineY, lyricMaxWidth);
+      }
+      ctx.fillText(value, panelLeft, baselineY, lyricMaxWidth);
+      ctx.restore();
+    };
+
     ctx.textAlign = 'left';
     ctx.letterSpacing = '0px';
 
-    visibleRows.forEach((row, slotIndex) => {
-      if (!row.original && !row.translation) return;
-      const offset = slotOffsets[slotIndex];
-      const slotCenterY = centerY + offset * slotGap;
-      const isCurrent = offset === 0;
-      // Only the current lyric fades. Outer context is statically lighter.
-      const contextAlpha = Math.abs(offset) === 2 ? 0.12 : 0.26;
-      const alpha = isCurrent ? mainAlpha : contextAlpha;
-      const hasTranslation = !!row.translation;
-      const originalY = hasTranslation
-        ? slotCenterY - sharedFontSize * 0.22
-        : slotCenterY + sharedFontSize * 0.30;
-      const translationY = slotCenterY + sharedFontSize * 0.92;
+    rows.forEach(row => {
+      if (row.height <= 0) return;
+      const top = rowTop.get(row.offset);
+      if (top === undefined) return;
 
-      if (row.original) {
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.font = `${originalWeight} ${sharedFontSize}px ${FONT_STACK}`;
-        ctx.fillStyle = isCurrent ? style.textColor : '#fff';
-        ctx.shadowColor = `rgba(0,0,0,${isCurrent ? shadowIntensity : shadowIntensity * 0.65})`;
-        ctx.shadowBlur = isCurrent ? 12 * shadowIntensity : 7 * shadowIntensity;
-        if (style.strokeWidth > 0 && isCurrent) {
-          ctx.strokeStyle = style.strokeColor;
-          ctx.lineWidth = style.strokeWidth;
-          ctx.strokeText(row.original, panelLeft, originalY, lyricMaxWidth);
-        }
-        ctx.fillText(row.original, panelLeft, originalY, lyricMaxWidth);
-        ctx.restore();
-      }
+      const isCurrent = row.offset === 0;
+      const alpha = isCurrent ? mainAlpha : 0.24;
+      let cursorY = top;
 
-      if (row.translation) {
-        ctx.save();
-        ctx.globalAlpha = alpha * 0.72;
-        ctx.font = `${translationWeight} ${sharedFontSize}px ${FONT_STACK}`;
-        ctx.fillStyle = '#fff';
-        ctx.shadowColor = `rgba(0,0,0,${shadowIntensity * 0.45})`;
-        ctx.shadowBlur = 6 * shadowIntensity;
-        ctx.fillText(row.translation, panelLeft, translationY, lyricMaxWidth);
-        ctx.restore();
+      row.originalLines.forEach(textLine => {
+        const baselineY = cursorY + fixedFontSize;
+        drawTextLine(textLine, baselineY, alpha, originalWeight, isCurrent, false);
+        cursorY += lineHeight;
+      });
+
+      if (row.translationLines.length > 0) {
+        if (row.originalLines.length > 0) cursorY += translationGap;
+        row.translationLines.forEach(textLine => {
+          const baselineY = cursorY + fixedFontSize;
+          drawTextLine(textLine, baselineY, alpha, translationWeight, isCurrent, true);
+          cursorY += lineHeight;
+        });
       }
     });
     return;
