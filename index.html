@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LLS-One | 繁中字製作工具</title>
+    <link rel="icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Apple_Music_icon.svg/2048px-Apple_Music_icon.svg.png" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Montserrat:wght@400;700;900&family=Noto+Sans+TC:wght@100;300;400;500;700;900&family=Noto+Serif+KR:wght@200;300;400;500;600;700;900&family=Noto+Serif+TC:wght@200;300;400;500;600;700;900&family=Zen+Old+Mincho:wght@400;500;700;900&display=block" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Noto Serif TC', 'Zen Old Mincho', 'Noto Serif KR', 'Cormorant Garamond', serif;
+        background-color: #0f0f11;
+        color: #e4e4e7;
+      }
+      
+      /* Custom Scrollbar - 文青復古風格 */
+      ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #18181b; 
+        border-radius: 5px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, #d97706 0%, #b45309 100%);
+        border-radius: 5px;
+        border: 2px solid #18181b;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+      }
+      
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 8px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(217, 119, 6, 0.3);
+        border-radius: 4px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: rgba(217, 119, 6, 0.5);
+      }
+      
+      .font-serif-tc {
+        font-family: 'Noto Serif TC', 'Zen Old Mincho', 'Noto Serif KR', serif;
+      }
+      
+      /* 復古紙張質感動畫 */
+      @keyframes paperTexture {
+        0%, 100% { opacity: 0.03; }
+        50% { opacity: 0.05; }
+      }
+      
+      /* 平滑過渡 */
+      * {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "mp4-muxer": "https://esm.sh/mp4-muxer@5.1.0",
+    "opencc-js": "https://esm.sh/opencc-js@1.0.5"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>
