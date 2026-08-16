@@ -956,8 +956,8 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
             return effectiveTime >= line.timestamp && effectiveTime < end;
           });
 
-          // --- CD BOOKLET：原版歌詞邏輯擴充為五句 ---
-          // 五句全部使用同一個固定字級；長句只換行，不因內容長度縮小字體。
+          // --- CD BOOKLET：原版歌詞邏輯維持三句 ---
+          // 三句全部使用同一個固定字級；長句只換行，不因內容長度縮小字體。
           // 原文在上、譯文在下；只有當前句沿用原版 mainAlpha 淡入／淡出。
           // 上下超出歌詞欄位的內容，依距離做漸淡 + blur，不讓整組歌詞移動。
           if (preset === 'cd-booklet' && !isVertical && currentIndex !== -1) {
@@ -982,7 +982,7 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
             const fixedFontSize = 40 * baseScale;
             const lineHeight = fixedFontSize * 1.30;
             const translationGap = Math.max(16, 20 * baseScale);
-            const sectionGap = Math.max(20, 26 * baseScale);
+            const sectionGap = Math.max(34, 44 * baseScale);
             const originalWeight = '600';
             const translationWeight = '400';
 
@@ -1017,7 +1017,7 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
                 height: number;
             };
 
-            const slotOffsets = [-2, -1, 0, 1, 2];
+            const slotOffsets = [-1, 0, 1];
             const rows: BookletRow[] = slotOffsets.map(offset => {
                 const lyric = project.lyrics[currentIndex + offset];
                 const original = getOriginal(lyric);
@@ -1037,23 +1037,23 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
                 return { offset, originalLines, translationLines, height };
             });
 
-            // 當前句固定在中心。前兩句向上堆、後兩句向下堆；沒有任何滑動／漂浮動畫。
+            // 當前句固定在中心。上一句在上、下一句在下；沒有任何滑動／漂浮動畫。
             const rowTop = new Map<number, number>();
-            const currentRow = rows[2];
+            const currentRow = rows[1];
             const currentTop = centerY - currentRow.height / 2;
             rowTop.set(0, currentTop);
 
             let upperCursor = currentTop;
-            for (let i = 1; i <= 2; i++) {
-                const row = rows[2 - i];
+            for (let i = 1; i <= 1; i++) {
+                const row = rows[1 - i];
                 if (!row || row.height <= 0) continue;
                 upperCursor -= sectionGap + row.height;
                 rowTop.set(row.offset, upperCursor);
             }
 
             let lowerCursor = currentTop + currentRow.height;
-            for (let i = 1; i <= 2; i++) {
-                const row = rows[2 + i];
+            for (let i = 1; i <= 1; i++) {
+                const row = rows[1 + i];
                 if (!row || row.height <= 0) continue;
                 lowerCursor += sectionGap;
                 rowTop.set(row.offset, lowerCursor);
