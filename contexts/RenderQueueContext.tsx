@@ -1,7 +1,14 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { ProjectData } from '../types';
 import { renderProjectOffscreen } from '../services/renderEngine';
-import { buildOutputFileName } from '../utils/outputFilename';
+const buildLyricVideoOutputName = (artist: string, title: string, extension: string) => {
+  const sanitize = (value: string, fallback: string) =>
+    (value || fallback).trim().replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ') || fallback;
+  const cleanArtist = sanitize(artist, 'Unknown Artist');
+  const cleanTitle = sanitize(title, '未命名');
+  const cleanExtension = extension.replace(/^\./, '').trim() || 'mp4';
+  return `${cleanArtist} - ${cleanTitle}｜繁體中字翻譯.${cleanExtension}`;
+};
 
 // Extended type for internal queue handling
 type QueueItem = ProjectData & { renderId?: string };
@@ -74,7 +81,7 @@ export const RenderQueueProvider: React.FC<{ children: React.ReactNode }> = ({ c
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = buildOutputFileName(
+          a.download = buildLyricVideoOutputName(
             item.metadata.artist,
             item.metadata.title,
             'mp4'
