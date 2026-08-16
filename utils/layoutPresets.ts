@@ -8,7 +8,7 @@ export const LAYOUT_PRESETS: Record<LayoutPreset, LayoutConfig> = {
     artist: { x: 0.46, y: 0.22, scale: 0.85, visible: true, align: 'left' },
     album: { x: 0.46, y: 0.27, scale: 0.75, visible: true, align: 'left' },
     title: { x: 0.46, y: 0.37, scale: 0.85, visible: true, align: 'left' },
-    lyrics: { x: 0.525, y: 0.50, scale: 1.05, visible: true, align: 'left' },
+    lyrics: { x: 0.425, y: 0.50, scale: 1.05, visible: true, align: 'left' },
     cover: { x: 0.23, y: 0.5, scale: 1.6, visible: true, align: 'center' }
   },
   'magazine-left': {
