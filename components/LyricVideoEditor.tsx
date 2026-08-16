@@ -782,21 +782,21 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
               ctx.shadowColor = 'rgba(0,0,0,0.35)';
               ctx.shadowBlur = 6;
 
-              // CD booklet 左下資訊：加大字級並拉開垂直距離，避免歌名／專輯名／歌手擠成一團。
+              // CD booklet 左下資訊固定順序：歌手 → 專輯 → 歌曲。
+              ctx.globalAlpha = 0.64;
+              ctx.font = `600 22px ${FONT_STACK}`;
+              ctx.letterSpacing = '1.4px';
+              ctx.fillText(project.metadata.artist || '', metaCenterX, coverBottom + 58, size * 0.94);
+
               ctx.globalAlpha = 0.72;
               ctx.font = `600 24px ${FONT_STACK}`;
               ctx.letterSpacing = '1.6px';
-              ctx.fillText(project.metadata.album || '', metaCenterX, coverBottom + 58, size * 0.94);
+              ctx.fillText(project.metadata.album || '', metaCenterX, coverBottom + 107, size * 0.94);
 
               ctx.globalAlpha = 0.98;
               ctx.font = `800 44px ${FONT_STACK}`;
               ctx.letterSpacing = '0.8px';
-              ctx.fillText(project.metadata.title || '', metaCenterX, coverBottom + 116, size * 0.94);
-
-              ctx.globalAlpha = 0.64;
-              ctx.font = `600 22px ${FONT_STACK}`;
-              ctx.letterSpacing = '1.4px';
-              ctx.fillText(project.metadata.artist || '', metaCenterX, coverBottom + 169, size * 0.94);
+              ctx.fillText(project.metadata.title || '', metaCenterX, coverBottom + 165, size * 0.94);
               ctx.restore();
           }
       }
@@ -956,9 +956,11 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
             return effectiveTime >= line.timestamp && effectiveTime < end;
           });
 
-          // --- CD BOOKLET：右側最多五行的當前歌詞 ---
+          // --- CD BOOKLET：固定五行歌詞視窗（前 2 / 當前 / 後 2） ---
+          // 五個 Y 位置永遠固定，不做 translate / float / slide 動畫。
+          // 換句時只更新各固定位置上的文字：最上方舊句淡出、最下方新句淡入，
+          // 讓畫面有「歌詞往前走」的感覺，但文字本身不會真的上下移動。
           if (preset === 'cd-booklet' && !isVertical && currentIndex !== -1) {
-            const line = project.lyrics[currentIndex];
             const baseScale = (effectiveLayout.lyrics.scale || 1) * fontSizeScale;
             const style = lyricStyle || {
                 textColor: '#ffffff',
@@ -970,104 +972,88 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
                 autoContrast: false
             };
 
-            // multiLine 是同步歌詞的正式來源；舊資料沒有 multiLine 時，再補 original / romanization / translation。
-            const logicalLines = Array.from(new Set([
-                ...(Array.isArray(line.multiLine) ? line.multiLine : []),
-                line.original || '',
-                line.romanization || '',
-                line.translation || ''
-            ].map(text => String(text || '').trim()).filter(Boolean))).slice(0, 5);
+            // 更靠近封面／中間分隔線。0.525 約在分隔線右側留一個舒適的小間距。
+            const panelLeft = Math.max(width * 0.525, effectiveLayout.lyrics.x * width);
+            const panelRight = width * 0.955;
+            const lyricMaxWidth = Math.max(320, panelRight - panelLeft);
+            const lyricAreaTop = height * 0.105;
+            const lyricAreaBottom = height * 0.895;
+            const requestedCenterY = effectiveLayout.lyrics.y * height;
+            const centerY = Math.max(
+                lyricAreaTop + height * 0.28,
+                Math.min(lyricAreaBottom - height * 0.28, requestedCenterY)
+            );
 
-            if (logicalLines.length > 0) {
-                // CD booklet 的整個右半邊都留給歌詞。即使舊 preset 的 lyrics.x 還是 0.46，
-                // 也不允許文字跨過中間分隔線。使用者若把 X 往右調，仍會照設定生效。
-                const panelLeft = Math.max(width * 0.545, effectiveLayout.lyrics.x * width);
-                const panelRight = width * 0.955;
-                const lyricMaxWidth = Math.max(320, panelRight - panelLeft);
-                const lyricAreaTop = height * 0.11;
-                const lyricAreaBottom = height * 0.89;
-                const lyricAreaHeight = lyricAreaBottom - lyricAreaTop;
-                const requestedCenterY = effectiveLayout.lyrics.y * height;
-                const centerY = Math.max(
-                    lyricAreaTop + lyricAreaHeight * 0.22,
-                    Math.min(lyricAreaBottom - lyricAreaHeight * 0.22, requestedCenterY)
-                );
+            // 固定五個位置：目前歌詞永遠位於第三行。
+            const slotGap = Math.min(height * 0.14, 124 * baseScale);
+            const slotOffsets = [-2, -1, 0, 1, 2];
+            const slotBaseAlpha = [0.22, 0.58, 1, 0.58, 0.22];
+            const slotBaseSize = [42, 48, 58, 48, 42];
+            const slotWeight = ['500', '600', '750', '600', '500'];
 
-                type BookletRow = {
-                    wrapped: string[];
-                    fontSize: number;
-                    lineHeight: number;
-                    alpha: number;
-                    weight: string;
-                };
+            const currentLine = project.lyrics[currentIndex];
+            const currentEnd = getLineEndTime(currentLine, currentIndex);
+            const sinceStart = Math.max(0, effectiveTime - currentLine.timestamp);
+            const untilEnd = Math.max(0, currentEnd - effectiveTime);
+            const edgeFadeDuration = 0.42;
+            const bottomEdgeIn = Math.max(0, Math.min(1, sinceStart / edgeFadeDuration));
+            const topEdgeOut = Math.max(0, Math.min(1, untilEnd / edgeFadeDuration));
 
-                const buildRows = (fitFactor: number) => {
-                    const rows: BookletRow[] = logicalLines.map((text, index) => {
-                        const isPrimary = index === 0;
-                        const preferredSize = (isPrimary ? 62 : 47) * baseScale * fitFactor;
-                        const fontSize = Math.min(isPrimary ? 68 : 53, preferredSize);
-                        const weight = isPrimary ? '750' : '550';
-                        ctx.font = `${weight} ${fontSize}px ${FONT_STACK}`;
-                        return {
-                            wrapped: wrapText(ctx, text, lyricMaxWidth),
-                            fontSize,
-                            lineHeight: fontSize * 1.32,
-                            alpha: isPrimary ? 1 : 0.82,
-                            weight
-                        };
-                    });
-                    const rowGap = Math.max(10, 14 * baseScale * fitFactor);
-                    const totalHeight = rows.reduce((sum, row) => sum + row.wrapped.length * row.lineHeight, 0)
-                        + Math.max(0, rows.length - 1) * rowGap;
-                    return { rows, rowGap, totalHeight };
-                };
-
-                let fitFactor = 1;
-                let metrics = buildRows(fitFactor);
-                const targetHeight = lyricAreaHeight * 0.90;
-                for (let i = 0; i < 12 && metrics.totalHeight > targetHeight && fitFactor > 0.58; i++) {
-                    const ratio = targetHeight / metrics.totalHeight;
-                    fitFactor = Math.max(0.58, fitFactor * Math.max(0.84, Math.min(0.96, ratio * 0.99)));
-                    metrics = buildRows(fitFactor);
+            const getBookletText = (lyric: any): string => {
+                if (!lyric) return '';
+                const original = String(lyric.original || '').trim();
+                if (original) return original;
+                if (Array.isArray(lyric.multiLine)) {
+                    const first = lyric.multiLine.find((part: unknown) => String(part || '').trim());
+                    if (first) return String(first).trim();
                 }
-                if (metrics.totalHeight > targetHeight) {
-                    fitFactor = Math.max(0.46, fitFactor * targetHeight / metrics.totalHeight);
-                    metrics = buildRows(fitFactor);
+                return String(lyric.translation || lyric.romanization || '').trim();
+            };
+
+            const fitFontSize = (text: string, desiredSize: number, weight: string) => {
+                let fontSize = desiredSize;
+                ctx.font = `${weight} ${fontSize}px ${FONT_STACK}`;
+                const measured = ctx.measureText(text).width;
+                if (measured > lyricMaxWidth && measured > 0) {
+                    fontSize *= (lyricMaxWidth / measured) * 0.98;
                 }
+                return Math.max(30, fontSize);
+            };
 
-                const start = line.timestamp;
-                const end = getLineEndTime(line, currentIndex);
-                const timeSinceStart = effectiveTime - start;
-                const timeUntilEnd = end - effectiveTime;
-                let groupAlpha = 1;
-                if (timeSinceStart < 0.28) groupAlpha = timeSinceStart / 0.28;
-                const isLastLine = currentIndex === project.lyrics.length - 1;
-                const fadeOutDur = isLastLine ? 1.5 : 0.4;
-                if (timeUntilEnd < fadeOutDur) groupAlpha = Math.min(groupAlpha, timeUntilEnd / fadeOutDur);
-                groupAlpha = Math.max(0, Math.min(1, groupAlpha));
+            ctx.textAlign = 'left';
+            ctx.letterSpacing = '0px';
 
-                let cursorY = centerY - metrics.totalHeight / 2;
-                cursorY = Math.max(lyricAreaTop, Math.min(cursorY, lyricAreaBottom - metrics.totalHeight));
-                const floatY = Math.sin(time * 0.7) * 1.8;
+            slotOffsets.forEach((offset, slotIndex) => {
+                const lyricIndex = currentIndex + offset;
+                const lyric = project.lyrics[lyricIndex];
+                const text = getBookletText(lyric);
+                if (!text) return;
 
-                ctx.textAlign = 'left';
-                ctx.letterSpacing = '0px';
-                metrics.rows.forEach((row, rowIndex) => {
-                    row.wrapped.forEach(textLine => {
-                        const baselineY = cursorY + row.fontSize;
-                        ctx.save();
-                        ctx.globalAlpha = groupAlpha * row.alpha;
-                        ctx.shadowColor = `rgba(0,0,0,${shadowIntensity})`;
-                        ctx.shadowBlur = rowIndex === 0 ? 12 * shadowIntensity : 8 * shadowIntensity;
-                        ctx.font = `${row.weight} ${row.fontSize}px ${FONT_STACK}`;
-                        ctx.fillStyle = rowIndex === 0 ? style.textColor : '#ffffff';
-                        ctx.fillText(textLine, panelLeft, baselineY + floatY, lyricMaxWidth);
-                        ctx.restore();
-                        cursorY += row.lineHeight;
-                    });
-                    if (rowIndex < metrics.rows.length - 1) cursorY += metrics.rowGap;
-                });
-            }
+                // 第一行在目前句尾逐漸淡掉；第五行在新句開始後逐漸淡入。
+                // 中間三行維持固定透明度，沒有位移動畫。
+                let alpha = slotBaseAlpha[slotIndex];
+                if (slotIndex === 0) alpha *= topEdgeOut;
+                if (slotIndex === 4) alpha *= bottomEdgeIn;
+
+                const desiredSize = slotBaseSize[slotIndex] * baseScale;
+                const weight = slotWeight[slotIndex];
+                const fontSize = fitFontSize(text, desiredSize, weight);
+                const y = centerY + offset * slotGap;
+
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.font = `${weight} ${fontSize}px ${FONT_STACK}`;
+                ctx.fillStyle = slotIndex === 2 ? style.textColor : '#ffffff';
+                ctx.shadowColor = `rgba(0,0,0,${shadowIntensity})`;
+                ctx.shadowBlur = slotIndex === 2 ? 12 * shadowIntensity : (slotIndex === 1 || slotIndex === 3 ? 7 : 4) * shadowIntensity;
+                if (style.strokeWidth > 0 && slotIndex === 2) {
+                    ctx.strokeStyle = style.strokeColor;
+                    ctx.lineWidth = style.strokeWidth;
+                    ctx.strokeText(text, panelLeft, y, lyricMaxWidth);
+                }
+                ctx.fillText(text, panelLeft, y, lyricMaxWidth);
+                ctx.restore();
+            });
           } else if (currentIndex !== -1) {
             // ... (Standard lyric drawing remains unchanged) ...
             const line = project.lyrics[currentIndex];
