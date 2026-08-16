@@ -986,8 +986,8 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
             const lyricAreaTop = height * 0.105;
             const lyricAreaBottom = height * 0.895;
 
-            const originalFontSize = 40 * baseScale;
-            const translationFontSize = Math.max(12 * baseScale, originalFontSize - 7 * baseScale);
+            const originalFontSize = 42 * baseScale;
+            const translationFontSize = 33 * baseScale;
             const originalLineHeight = originalFontSize * 1.30;
             const translationLineHeight = translationFontSize * 1.30;
             const translationGap = Math.max(16, 20 * baseScale);
