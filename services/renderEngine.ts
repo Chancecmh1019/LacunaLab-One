@@ -547,8 +547,10 @@ const drawLyricFrame = (
     const lyricAreaTop = height * 0.105;
     const lyricAreaBottom = height * 0.895;
 
-    const fixedFontSize = 40 * baseScale;
-    const lineHeight = fixedFontSize * 1.30;
+    const originalFontSize = 40 * baseScale;
+    const translationFontSize = Math.max(12 * baseScale, originalFontSize - 7 * baseScale);
+    const originalLineHeight = originalFontSize * 1.30;
+    const translationLineHeight = translationFontSize * 1.30;
     const translationGap = Math.max(16, 20 * baseScale);
     const sectionGap = Math.max(34, 44 * baseScale);
     const originalWeight = '600';
@@ -556,8 +558,8 @@ const drawLyricFrame = (
 
     const requestedCenterY = effectiveLayout.lyrics.y * height;
     const centerY = Math.max(
-      lyricAreaTop + fixedFontSize * 1.6,
-      Math.min(lyricAreaBottom - fixedFontSize * 1.6, requestedCenterY)
+      lyricAreaTop + originalFontSize * 1.6,
+      Math.min(lyricAreaBottom - originalFontSize * 1.6, requestedCenterY)
     );
 
     const getOriginal = (lyric: any): string => {
@@ -591,16 +593,16 @@ const drawLyricFrame = (
       const original = getOriginal(lyric);
       const translation = getTranslation(lyric, original);
 
-      ctx.font = `${originalWeight} ${fixedFontSize}px ${FONT_STACK}`;
+      ctx.font = `${originalWeight} ${originalFontSize}px ${FONT_STACK}`;
       const originalLines = original ? wrapText(ctx, original, lyricMaxWidth) : [];
 
-      ctx.font = `${translationWeight} ${fixedFontSize}px ${FONT_STACK}`;
+      ctx.font = `${translationWeight} ${translationFontSize}px ${FONT_STACK}`;
       const translationLines = translation ? wrapText(ctx, translation, lyricMaxWidth) : [];
 
       const height =
-        originalLines.length * lineHeight +
+        originalLines.length * originalLineHeight +
         (translationLines.length > 0 && originalLines.length > 0 ? translationGap : 0) +
-        translationLines.length * lineHeight;
+        translationLines.length * translationLineHeight;
 
       return { offset, originalLines, translationLines, height };
     });
@@ -640,13 +642,13 @@ const drawLyricFrame = (
     if (until < fadeOut) mainAlpha = Math.min(mainAlpha, until / fadeOut);
     mainAlpha = Math.max(0, Math.min(1, mainAlpha));
 
-    const getEdgeEffect = (baselineY: number) => {
-      const visualCenterY = baselineY - fixedFontSize * 0.35;
+    const getEdgeEffect = (baselineY: number, fontSize: number) => {
+      const visualCenterY = baselineY - fontSize * 0.35;
       const distanceToEdge = Math.min(
         visualCenterY - lyricAreaTop,
         lyricAreaBottom - visualCenterY
       );
-      const fadeZone = Math.max(56, fixedFontSize * 1.75);
+      const fadeZone = Math.max(56, fontSize * 1.75);
       const t = Math.max(0, Math.min(1, distanceToEdge / fadeZone));
       const fade = t * t * (3 - 2 * t);
       const blur = (1 - fade) * Math.max(7, 8 * baseScale);
@@ -659,9 +661,10 @@ const drawLyricFrame = (
       baseAlpha: number,
       weight: string,
       isCurrent: boolean,
-      isTranslation: boolean
+      isTranslation: boolean,
+      fontSize: number
     ) => {
-      const { fade, blur } = getEdgeEffect(baselineY);
+      const { fade, blur } = getEdgeEffect(baselineY, fontSize);
       if (fade <= 0.002) return;
 
       ctx.save();
@@ -670,7 +673,7 @@ const drawLyricFrame = (
       ctx.clip();
       ctx.globalAlpha = baseAlpha * fade * (isTranslation ? 0.76 : 1);
       ctx.filter = blur > 0.35 ? `blur(${blur.toFixed(2)}px)` : 'none';
-      ctx.font = `${weight} ${fixedFontSize}px ${FONT_STACK}`;
+      ctx.font = `${weight} ${fontSize}px ${FONT_STACK}`;
       ctx.fillStyle = isCurrent && !isTranslation ? style.textColor : '#fff';
       ctx.shadowColor = `rgba(0,0,0,${isCurrent ? shadowIntensity : shadowIntensity * 0.62})`;
       ctx.shadowBlur = isCurrent ? 12 * shadowIntensity : 7 * shadowIntensity;
@@ -697,17 +700,17 @@ const drawLyricFrame = (
       let cursorY = top;
 
       row.originalLines.forEach(textLine => {
-        const baselineY = cursorY + fixedFontSize;
-        drawTextLine(textLine, baselineY, alpha, originalWeight, isCurrent, false);
-        cursorY += lineHeight;
+        const baselineY = cursorY + originalFontSize;
+        drawTextLine(textLine, baselineY, alpha, originalWeight, isCurrent, false, originalFontSize);
+        cursorY += originalLineHeight;
       });
 
       if (row.translationLines.length > 0) {
         if (row.originalLines.length > 0) cursorY += translationGap;
         row.translationLines.forEach(textLine => {
-          const baselineY = cursorY + fixedFontSize;
-          drawTextLine(textLine, baselineY, alpha, translationWeight, isCurrent, true);
-          cursorY += lineHeight;
+          const baselineY = cursorY + translationFontSize;
+          drawTextLine(textLine, baselineY, alpha, translationWeight, isCurrent, true, translationFontSize);
+          cursorY += translationLineHeight;
         });
       }
     });
