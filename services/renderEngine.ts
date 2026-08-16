@@ -535,8 +535,8 @@ const drawLyricFrame = (
     glowColor: '#000', glowBlur: 0, fontWeight: '400', autoContrast: false
   };
 
-  // CD Booklet: keep the original lyric behavior, expanded to five lyric groups.
-  // All five groups use one fixed font size. Long text wraps instead of shrinking the song's subtitles.
+  // CD Booklet: keep the original lyric behavior with three lyric groups.
+  // All three groups use one fixed font size. Long text wraps instead of shrinking the song's subtitles.
   // Original is above translation; only the current lyric uses the original mainAlpha fade.
   // Content near/outside the top and bottom of the lyric field fades and blurs at the edges.
   if (preset === 'cd-booklet' && !isVertical) {
@@ -550,7 +550,7 @@ const drawLyricFrame = (
     const fixedFontSize = 40 * baseScale;
     const lineHeight = fixedFontSize * 1.30;
     const translationGap = Math.max(16, 20 * baseScale);
-    const sectionGap = Math.max(20, 26 * baseScale);
+    const sectionGap = Math.max(34, 44 * baseScale);
     const originalWeight = '600';
     const translationWeight = '400';
 
@@ -585,7 +585,7 @@ const drawLyricFrame = (
       height: number;
     };
 
-    const slotOffsets = [-2, -1, 0, 1, 2];
+    const slotOffsets = [-1, 0, 1];
     const rows: BookletRow[] = slotOffsets.map(offset => {
       const lyric = project.lyrics[currentIndex + offset];
       const original = getOriginal(lyric);
@@ -607,21 +607,21 @@ const drawLyricFrame = (
 
     // Keep the current lyric centered. Context lyrics stack above/below without any movement animation.
     const rowTop = new Map<number, number>();
-    const currentRow = rows[2];
+    const currentRow = rows[1];
     const currentTop = centerY - currentRow.height / 2;
     rowTop.set(0, currentTop);
 
     let upperCursor = currentTop;
-    for (let i = 1; i <= 2; i++) {
-      const row = rows[2 - i];
+    for (let i = 1; i <= 1; i++) {
+      const row = rows[1 - i];
       if (!row || row.height <= 0) continue;
       upperCursor -= sectionGap + row.height;
       rowTop.set(row.offset, upperCursor);
     }
 
     let lowerCursor = currentTop + currentRow.height;
-    for (let i = 1; i <= 2; i++) {
-      const row = rows[2 + i];
+    for (let i = 1; i <= 1; i++) {
+      const row = rows[1 + i];
       if (!row || row.height <= 0) continue;
       lowerCursor += sectionGap;
       rowTop.set(row.offset, lowerCursor);
