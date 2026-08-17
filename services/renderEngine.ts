@@ -345,14 +345,6 @@ const drawLyricFrame = (
     ctx.globalAlpha = 0.045 + Math.sin(absoluteTime * 0.22) * 0.008;
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, width, height);
-    ctx.globalAlpha = 0.07;
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1;
-    const guideX = width * 0.515 + Math.sin(absoluteTime * 0.12) * 3;
-    ctx.beginPath();
-    ctx.moveTo(guideX, height * 0.1);
-    ctx.lineTo(guideX, height * 0.9);
-    ctx.stroke();
     ctx.restore();
   }
 
@@ -535,8 +527,8 @@ const drawLyricFrame = (
     glowColor: '#000', glowBlur: 0, fontWeight: '400', autoContrast: false
   };
 
-  // CD Booklet: keep the original lyric behavior with three lyric groups.
-  // All three groups use one fixed font size. Long text wraps instead of shrinking the song's subtitles.
+  // CD Booklet: keep the original three-group lyric behavior.
+  // Context groups are slightly smaller and the current group slightly larger; all three are a little larger than before.
   // Original is above translation; only the current lyric uses the original mainAlpha fade.
   // Content near/outside the top and bottom of the lyric field fades and blurs at the edges.
   if (preset === 'cd-booklet' && !isVertical) {
@@ -547,10 +539,11 @@ const drawLyricFrame = (
     const lyricAreaTop = height * 0.105;
     const lyricAreaBottom = height * 0.895;
 
-    const originalFontSize = 42 * baseScale;
-    const translationFontSize = 35 * baseScale;
-    const originalLineHeight = originalFontSize * 1.30;
-    const translationLineHeight = translationFontSize * 1.30;
+    const baseOriginalFontSize = 44 * baseScale;
+    const baseTranslationFontSize = 37 * baseScale;
+    const contextRowScale = 0.98;
+    const activeRowScale = 1.06;
+    const maxOriginalFontSize = baseOriginalFontSize * activeRowScale;
     const translationGap = Math.max(12, 14 * baseScale);
     const sectionGap = Math.max(34, 44 * baseScale);
     const originalWeight = '600';
@@ -558,8 +551,8 @@ const drawLyricFrame = (
 
     const requestedCenterY = effectiveLayout.lyrics.y * height;
     const centerY = Math.max(
-      lyricAreaTop + originalFontSize * 1.6,
-      Math.min(lyricAreaBottom - originalFontSize * 1.6, requestedCenterY)
+      lyricAreaTop + maxOriginalFontSize * 1.6,
+      Math.min(lyricAreaBottom - maxOriginalFontSize * 1.6, requestedCenterY)
     );
 
     const getOriginal = (lyric: any): string => {
@@ -584,6 +577,11 @@ const drawLyricFrame = (
       offset: number;
       originalLines: string[];
       translationLines: string[];
+      originalFontSize: number;
+      translationFontSize: number;
+      originalLineHeight: number;
+      translationLineHeight: number;
+      translationGap: number;
       height: number;
     };
 
@@ -592,6 +590,12 @@ const drawLyricFrame = (
       const lyric = project.lyrics[currentIndex + offset];
       const original = getOriginal(lyric);
       const translation = getTranslation(lyric, original);
+      const rowScale = offset === 0 ? activeRowScale : contextRowScale;
+      const originalFontSize = baseOriginalFontSize * rowScale;
+      const translationFontSize = baseTranslationFontSize * rowScale;
+      const originalLineHeight = originalFontSize * 1.30;
+      const translationLineHeight = translationFontSize * 1.30;
+      const rowTranslationGap = translationGap * rowScale;
 
       ctx.font = `${originalWeight} ${originalFontSize}px ${FONT_STACK}`;
       const originalLines = original ? wrapText(ctx, original, lyricMaxWidth) : [];
@@ -601,10 +605,20 @@ const drawLyricFrame = (
 
       const height =
         originalLines.length * originalLineHeight +
-        (translationLines.length > 0 && originalLines.length > 0 ? translationGap : 0) +
+        (translationLines.length > 0 && originalLines.length > 0 ? rowTranslationGap : 0) +
         translationLines.length * translationLineHeight;
 
-      return { offset, originalLines, translationLines, height };
+      return {
+        offset,
+        originalLines,
+        translationLines,
+        originalFontSize,
+        translationFontSize,
+        originalLineHeight,
+        translationLineHeight,
+        translationGap: rowTranslationGap,
+        height
+      };
     });
 
     // Keep the current lyric centered. Context lyrics stack above/below without any movement animation.
@@ -700,17 +714,17 @@ const drawLyricFrame = (
       let cursorY = top;
 
       row.originalLines.forEach(textLine => {
-        const baselineY = cursorY + originalFontSize;
-        drawTextLine(textLine, baselineY, alpha, originalWeight, isCurrent, false, originalFontSize);
-        cursorY += originalLineHeight;
+        const baselineY = cursorY + row.originalFontSize;
+        drawTextLine(textLine, baselineY, alpha, originalWeight, isCurrent, false, row.originalFontSize);
+        cursorY += row.originalLineHeight;
       });
 
       if (row.translationLines.length > 0) {
-        if (row.originalLines.length > 0) cursorY += translationGap;
+        if (row.originalLines.length > 0) cursorY += row.translationGap;
         row.translationLines.forEach(textLine => {
-          const baselineY = cursorY + translationFontSize;
-          drawTextLine(textLine, baselineY, alpha, translationWeight, isCurrent, true, translationFontSize);
-          cursorY += translationLineHeight;
+          const baselineY = cursorY + row.translationFontSize;
+          drawTextLine(textLine, baselineY, alpha, translationWeight, isCurrent, true, row.translationFontSize);
+          cursorY += row.translationLineHeight;
         });
       }
     });
