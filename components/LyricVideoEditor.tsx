@@ -644,13 +644,12 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
           let cy = cv.y * height;
           
           // CD Booklet：把「封面 + 專輯名 + 歌名 + 演出者」視為同一個資訊群組，整組沿 Y 軸置中。
-          // 只做極小幅度的平移，不改變使用者設定的 X 位置，也不讓元素互相追趕。
+          // 左側資訊群組固定在同一位置，不再隨時間漂移。
           if (preset === 'cd-booklet' && !isVertical) {
               const metadataStackHeight = 208;
               const groupHeight = size + metadataStackHeight;
               const groupTop = (height - groupHeight) / 2;
-              cx += Math.cos(time * 0.32) * 2.5;
-              cy = groupTop + size / 2 + Math.sin(time * 0.42) * 3.5;
+              cy = groupTop + size / 2;
           }
           
           // Dynamic Floating Effect
