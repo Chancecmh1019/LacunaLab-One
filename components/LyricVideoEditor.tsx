@@ -458,7 +458,7 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
       }
 
       // --- CD BOOKLET AMBIENT MOTION ---
-      // 文青版不使用誇張特效，而是用極慢的封面光影、紙面漂移與細線位移補足動態感。
+      // 文青版不使用誇張特效，而是用極慢的封面光影與紙面漂移補足動態感。
       if (preset === 'cd-booklet' && !isVertical) {
           ctx.save();
           const driftX = Math.sin(time * 0.18) * width * 0.018;
@@ -486,16 +486,6 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
           ctx.globalAlpha = 0.045 + Math.sin(time * 0.22) * 0.008;
           ctx.fillStyle = glow;
           ctx.fillRect(0, 0, width, height);
-
-          // 幾乎不被注意到的「印刷版面漂移線」，讓靜態畫面有呼吸感。
-          ctx.globalAlpha = 0.07;
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1;
-          const guideX = width * 0.515 + Math.sin(time * 0.12) * 3;
-          ctx.beginPath();
-          ctx.moveTo(guideX, height * 0.10);
-          ctx.lineTo(guideX, height * 0.90);
-          ctx.stroke();
           ctx.restore();
       }
 
@@ -964,7 +954,7 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
           });
 
           // --- CD BOOKLET：原版歌詞邏輯維持三句 ---
-          // 三句全部使用同一個固定字級；長句只換行，不因內容長度縮小字體。
+          // 前後句略小、當前句略大；三組都比原本固定字級稍微放大，長句只換行不縮字。
           // 原文在上、譯文在下；只有當前句沿用原版 mainAlpha 淡入／淡出。
           // 上下超出歌詞欄位的內容，依距離做漸淡 + blur，不讓整組歌詞移動。
           if (preset === 'cd-booklet' && !isVertical && currentIndex !== -1) {
@@ -986,10 +976,11 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
             const lyricAreaTop = height * 0.105;
             const lyricAreaBottom = height * 0.895;
 
-            const originalFontSize = 42 * baseScale;
-            const translationFontSize = 35 * baseScale;
-            const originalLineHeight = originalFontSize * 1.30;
-            const translationLineHeight = translationFontSize * 1.30;
+            const baseOriginalFontSize = 44 * baseScale;
+            const baseTranslationFontSize = 37 * baseScale;
+            const contextRowScale = 0.98;
+            const activeRowScale = 1.06;
+            const maxOriginalFontSize = baseOriginalFontSize * activeRowScale;
             const translationGap = Math.max(12, 14 * baseScale);
             const sectionGap = Math.max(34, 44 * baseScale);
             const originalWeight = '600';
@@ -997,8 +988,8 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
 
             const requestedCenterY = effectiveLayout.lyrics.y * height;
             const centerY = Math.max(
-                lyricAreaTop + originalFontSize * 1.6,
-                Math.min(lyricAreaBottom - originalFontSize * 1.6, requestedCenterY)
+                lyricAreaTop + maxOriginalFontSize * 1.6,
+                Math.min(lyricAreaBottom - maxOriginalFontSize * 1.6, requestedCenterY)
             );
 
             const getOriginal = (lyric: any): string => {
@@ -1023,6 +1014,11 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
                 offset: number;
                 originalLines: string[];
                 translationLines: string[];
+                originalFontSize: number;
+                translationFontSize: number;
+                originalLineHeight: number;
+                translationLineHeight: number;
+                translationGap: number;
                 height: number;
             };
 
@@ -1031,6 +1027,12 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
                 const lyric = project.lyrics[currentIndex + offset];
                 const original = getOriginal(lyric);
                 const translation = getTranslation(lyric, original);
+                const rowScale = offset === 0 ? activeRowScale : contextRowScale;
+                const originalFontSize = baseOriginalFontSize * rowScale;
+                const translationFontSize = baseTranslationFontSize * rowScale;
+                const originalLineHeight = originalFontSize * 1.30;
+                const translationLineHeight = translationFontSize * 1.30;
+                const rowTranslationGap = translationGap * rowScale;
 
                 ctx.font = `${originalWeight} ${originalFontSize}px ${FONT_STACK}`;
                 const originalLines = original ? wrapText(ctx, original, lyricMaxWidth) : [];
@@ -1040,10 +1042,20 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
 
                 const height =
                     originalLines.length * originalLineHeight +
-                    (translationLines.length > 0 && originalLines.length > 0 ? translationGap : 0) +
+                    (translationLines.length > 0 && originalLines.length > 0 ? rowTranslationGap : 0) +
                     translationLines.length * translationLineHeight;
 
-                return { offset, originalLines, translationLines, height };
+                return {
+                    offset,
+                    originalLines,
+                    translationLines,
+                    originalFontSize,
+                    translationFontSize,
+                    originalLineHeight,
+                    translationLineHeight,
+                    translationGap: rowTranslationGap,
+                    height
+                };
             });
 
             // 當前句固定在中心。上一句在上、下一句在下；沒有任何滑動／漂浮動畫。
@@ -1141,17 +1153,17 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
                 let cursorY = top;
 
                 row.originalLines.forEach(textLine => {
-                    const baselineY = cursorY + originalFontSize;
-                    drawTextLine(textLine, baselineY, alpha, originalWeight, isCurrent, false, originalFontSize);
-                    cursorY += originalLineHeight;
+                    const baselineY = cursorY + row.originalFontSize;
+                    drawTextLine(textLine, baselineY, alpha, originalWeight, isCurrent, false, row.originalFontSize);
+                    cursorY += row.originalLineHeight;
                 });
 
                 if (row.translationLines.length > 0) {
-                    if (row.originalLines.length > 0) cursorY += translationGap;
+                    if (row.originalLines.length > 0) cursorY += row.translationGap;
                     row.translationLines.forEach(textLine => {
-                        const baselineY = cursorY + translationFontSize;
-                        drawTextLine(textLine, baselineY, alpha, translationWeight, isCurrent, true, translationFontSize);
-                        cursorY += translationLineHeight;
+                        const baselineY = cursorY + row.translationFontSize;
+                        drawTextLine(textLine, baselineY, alpha, translationWeight, isCurrent, true, row.translationFontSize);
+                        cursorY += row.translationLineHeight;
                     });
                 }
             });
