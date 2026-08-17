@@ -5,6 +5,7 @@ import { ProjectData, LayoutPreset, LayoutConfig, ElementStyle, VocabWord, Water
 import { analyzeSongVibe, generateAestheticImage, generateFastImage, searchLexicaImages, generateBackgroundVideo, generateRomanization, extractVocabulary } from '../services/geminiService';
 import { Play, Pause, Download, Wand2, Loader2, Image as ImageIcon, Sparkles, Layout, Globe, Type, Film, Layers, Upload, Disc, Search, Grid, Zap, X, Crown, ArrowRight, Video, Aperture, Move, Link as LinkIcon, Clock, Minus, Plus, Settings2, MoveVertical, Palette, Sun, Moon, CheckCircle, Smartphone, Activity, Gamepad2, GraduationCap, User, Eye, EyeOff, MoveHorizontal, MousePointerClick, Sliders, Scissors, Stamp, ListVideo } from 'lucide-react';
 import { wrapText, drawRoundedRect, getContrastColor } from '../utils/canvasUtils';
+import { drawCdBookletPortraitHeader, drawCdBookletPortraitLyrics } from '../utils/cdBookletPortrait';
 import { LAYOUT_PRESETS, FONT_STACK } from '../utils/layoutPresets';
 import { getLanguageLabel, detectLanguageFromLyrics } from '../utils/languageDetector';
 import { useRenderQueue } from '../contexts/RenderQueueContext';
@@ -635,8 +636,10 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
          cover: { ...layout.cover, x: 0.5, y: 0.3, align: 'center' as const, scale: 0.8 } 
       } : layout;
 
-      // ... (Cover drawing logic remains same) ...
-      if (effectiveLayout.cover && effectiveLayout.cover.visible && albumCover) {
+      // CD Booklet 9:16 has its own composition. Other presets and 16:9 keep the existing cover path.
+      if (preset === 'cd-booklet' && isVertical) {
+          drawCdBookletPortraitHeader(ctx, project, albumCover, shadowIntensity);
+      } else if (effectiveLayout.cover && effectiveLayout.cover.visible && albumCover) {
           const cv = effectiveLayout.cover;
           const size = 400 * cv.scale; 
           
@@ -910,7 +913,7 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
                }
           }
 
-          if (preset !== 'cd-booklet' || isVertical) {
+          if (preset !== 'cd-booklet') {
               drawTextElement(project.metadata.artist, effectiveLayout.artist, 42, "700", secondaryTextColor, "6px");
 
               if (effectiveLayout.album) { 
@@ -952,11 +955,15 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
             return effectiveTime >= line.timestamp && effectiveTime < end;
           });
 
+          // CD Booklet 9:16: dedicated safe-area lyric block. Romanization remains in data but is intentionally not displayed.
+          if (preset === 'cd-booklet' && isVertical && currentIndex !== -1) {
+              drawCdBookletPortraitLyrics(ctx, project, currentIndex, effectiveTime, shadowIntensity);
+
           // --- CD BOOKLET：原版歌詞邏輯維持三句 ---
           // 前後句略小、當前句略大；三組都比原本固定字級稍微放大，長句只換行不縮字。
           // 原文在上、譯文在下；只有當前句沿用原版 mainAlpha 淡入／淡出。
           // 上下超出歌詞欄位的內容，依距離做漸淡 + blur，不讓整組歌詞移動。
-          if (preset === 'cd-booklet' && !isVertical && currentIndex !== -1) {
+          } else if (preset === 'cd-booklet' && !isVertical && currentIndex !== -1) {
             const baseScale = (effectiveLayout.lyrics.scale || 1) * fontSizeScale;
             const style = lyricStyle || {
                 textColor: '#ffffff',
