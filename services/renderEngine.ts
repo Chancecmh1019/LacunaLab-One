@@ -1,6 +1,7 @@
 import { ProjectData, ElementStyle } from '../types';
 import { FONT_STACK } from '../utils/layoutPresets';
 import { wrapText, drawRoundedRect, getContrastColor } from '../utils/canvasUtils';
+import { drawCdBookletPortraitHeader, drawCdBookletPortraitLyrics } from '../utils/cdBookletPortrait';
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 
 declare class VideoEncoder {
@@ -373,8 +374,10 @@ const drawLyricFrame = (
     ctx.fillRect(0, 0, width, height);
   }
 
-  // Cover and the CD-Booklet centered information group.
-  if (effectiveLayout.cover.visible && coverImage) {
+  // CD Booklet 9:16 has a dedicated composition shared with the editor preview.
+  if (preset === 'cd-booklet' && isVertical) {
+    drawCdBookletPortraitHeader(ctx, project, coverImage, shadowIntensity);
+  } else if (effectiveLayout.cover.visible && coverImage) {
     const cv = effectiveLayout.cover;
     const size = 400 * cv.scale;
     let cx = cv.x * width;
@@ -502,7 +505,7 @@ const drawLyricFrame = (
   ctx.shadowColor = `rgba(0,0,0,${shadowIntensity})`;
   ctx.shadowBlur = 10 * shadowIntensity;
 
-  if (preset !== 'cd-booklet' || isVertical) {
+  if (preset !== 'cd-booklet') {
     drawTextElement(project.metadata.artist, effectiveLayout.artist, 42, '700', secondaryColor, '6px');
     drawTextElement(project.metadata.album || '', effectiveLayout.album, 34, '600', tertiaryTextColor, '4px');
     let titleScaleFactor = 1;
@@ -526,6 +529,12 @@ const drawLyricFrame = (
     textColor: '#fff', strokeColor: '#000', strokeWidth: 0,
     glowColor: '#000', glowBlur: 0, fontWeight: '400', autoContrast: false
   };
+
+  // CD Booklet 9:16: dedicated safe-area lyric block. Romanization is retained in data but not displayed.
+  if (preset === 'cd-booklet' && isVertical) {
+    drawCdBookletPortraitLyrics(ctx, project, currentIndex, effectiveTime, shadowIntensity);
+    return;
+  }
 
   // CD Booklet: keep the original three-group lyric behavior.
   // Context groups are slightly smaller and the current group slightly larger; all three are a little larger than before.
