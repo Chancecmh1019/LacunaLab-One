@@ -61,12 +61,11 @@ const getPortraitGeometry = (width: number, height: number) => {
     artistY: 1028 * scaleY,
     albumY: 1076 * scaleY,
     dividerY: 1122 * scaleY,
-    lyricPanelLeft: 58 * scaleX,
-    lyricPanelTop: 1160 * scaleY,
-    lyricPanelRight: 952 * scaleX,
-    lyricPanelBottom: 1634 * scaleY,
-    lyricTextLeft: 98 * scaleX,
-    lyricTextRight: 900 * scaleX,
+    // CD Booklet Shorts lyrics use a true screen-centered safe band.
+    // No visual card/panel is drawn; these values are layout bounds only.
+    lyricSafeTop: 1168 * scaleY,
+    lyricSafeBottom: 1636 * scaleY,
+    lyricMaxWidth: 760 * scaleX,
   };
 };
 
@@ -177,24 +176,26 @@ export const drawCdBookletPortraitLyrics = (
 ) => {
   if (currentIndex < 0 || !project.lyrics[currentIndex]) return;
 
-  const { width, height } = ctx.canvas;
-  const g = getPortraitGeometry(width, height);
+  const { width } = ctx.canvas;
+  const g = getPortraitGeometry(ctx.canvas.width, ctx.canvas.height);
   const current = project.lyrics[currentIndex];
   const next = project.lyrics[currentIndex + 1];
   const end = current.endTime ?? next?.timestamp ?? current.timestamp + 5;
   const since = effectiveTime - current.timestamp;
   const until = end - effectiveTime;
+
   let alpha = 1;
-  if (since < 0.25) alpha = since / 0.25;
-  const fadeOut = currentIndex === project.lyrics.length - 1 ? 1.5 : 0.5;
+  if (since < 0.22) alpha = since / 0.22;
+  const fadeOut = currentIndex === project.lyrics.length - 1 ? 1.5 : 0.45;
   if (until < fadeOut) alpha = Math.min(alpha, until / fadeOut);
   alpha = Math.max(0, Math.min(1, alpha));
-  const yFloatOffset = (1 - alpha) * 8 * g.unit;
 
-  const panelWidth = g.lyricPanelRight - g.lyricPanelLeft;
-  const panelHeight = g.lyricPanelBottom - g.lyricPanelTop;
-  const lyricMaxWidth = g.lyricTextRight - g.lyricTextLeft;
-  const baseScale = Math.max(0.72, Math.min(1.25, (project.theme.layout.lyrics.scale || 1) * (project.theme.fontSizeScale || 1)));
+  const original = String(current.original || '').trim();
+  const translationRaw = String(current.translation || '').trim();
+  const translation = translationRaw && translationRaw !== original ? translationRaw : '';
+  if (!original && !translation) return;
+
+  // Romanization stays in the lyric data, but CD Booklet Shorts never renders it.
   const style = project.theme.lyricStyle || {
     textColor: '#ffffff',
     strokeColor: '#000000',
@@ -205,78 +206,63 @@ export const drawCdBookletPortraitLyrics = (
     autoContrast: false,
   };
 
-  ctx.save();
-  ctx.globalAlpha = 0.94;
-  ctx.fillStyle = 'rgba(8,8,8,0.23)';
-  ctx.shadowColor = 'rgba(0,0,0,0.18)';
-  ctx.shadowBlur = 18 * g.unit;
-  drawRoundedRect(ctx, g.lyricPanelLeft, g.lyricPanelTop, panelWidth, panelHeight, 30 * g.unit);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = 'rgba(255,255,255,0.10)';
-  ctx.lineWidth = Math.max(1, g.unit);
-  ctx.stroke();
+  const lyricCenterX = width / 2;
+  const safeTop = g.lyricSafeTop;
+  const safeBottom = g.lyricSafeBottom;
+  const availableHeight = safeBottom - safeTop;
+  const maxWidth = g.lyricMaxWidth;
+  const baseScale = Math.max(
+    0.78,
+    Math.min(1.16, (project.theme.layout.lyrics.scale || 1) * (project.theme.fontSizeScale || 1))
+  );
 
-  const accent = project.theme.secondaryColor || '#ffffff';
-  ctx.globalAlpha = 0.78;
-  ctx.fillStyle = accent;
-  drawRoundedRect(ctx, g.lyricPanelLeft + 18 * g.unit, g.lyricPanelTop + 32 * g.unit, 5 * g.unit, 58 * g.unit, 3 * g.unit);
-  ctx.fill();
-  ctx.restore();
-
-  const original = String(current.original || '').trim();
-  const translationRaw = String(current.translation || '').trim();
-  const translation = translationRaw && translationRaw !== original ? translationRaw : '';
-
-  const panelInnerTop = g.lyricPanelTop + 42 * g.unit;
-  const panelInnerBottom = g.lyricPanelBottom - 42 * g.unit;
-  const availableHeight = panelInnerBottom - panelInnerTop;
   const originalWeight = String(style.fontWeight || '700');
-
-  let originalFontSize = 64 * g.unit * baseScale;
-  const maxOriginalSize = 70 * g.unit;
-  originalFontSize = Math.min(originalFontSize, maxOriginalSize);
-  const minOriginalSize = 30 * g.unit;
-
+  let originalFontSize = 62 * g.unit * baseScale;
+  const minOriginalFontSize = 30 * g.unit;
+  let translationFontSize = Math.max(22 * g.unit, originalFontSize * 0.52);
   let originalLines: string[] = [];
   let translationLines: string[] = [];
-  let translationFontSize = originalFontSize * 0.72;
+  let originalLineHeight = 0;
+  let translationLineHeight = 0;
+  let translationGap = 0;
   let totalHeight = 0;
 
-  while (originalFontSize >= minOriginalSize) {
-    translationFontSize = Math.max(24 * g.unit, originalFontSize * 0.72);
+  const measure = () => {
     ctx.font = `${originalWeight} ${originalFontSize}px ${FONT_STACK}`;
-    originalLines = wrapText(ctx, original, lyricMaxWidth);
-    ctx.font = `400 ${translationFontSize}px ${FONT_STACK}`;
-    translationLines = translation ? wrapText(ctx, translation, lyricMaxWidth) : [];
+    setLetterSpacing(ctx, '0px');
+    originalLines = original ? wrapText(ctx, original, maxWidth) : [];
 
-    const originalLineHeight = originalFontSize * 1.28;
-    const translationLineHeight = translationFontSize * 1.32;
-    const blockGap = translationLines.length > 0 && originalLines.length > 0 ? 22 * g.unit : 0;
-    totalHeight = originalLines.length * originalLineHeight + blockGap + translationLines.length * translationLineHeight;
-    if (totalHeight <= availableHeight) break;
-    originalFontSize -= 2 * g.unit;
+    translationFontSize = Math.max(22 * g.unit, originalFontSize * 0.52);
+    ctx.font = `500 ${translationFontSize}px ${FONT_STACK}`;
+    setLetterSpacing(ctx, '0.2px');
+    translationLines = translation ? wrapText(ctx, translation, maxWidth * 0.94) : [];
+
+    originalLineHeight = originalFontSize * 1.18;
+    translationLineHeight = translationFontSize * 1.30;
+    translationGap = originalLines.length > 0 && translationLines.length > 0 ? 30 * g.unit : 0;
+    totalHeight =
+      originalLines.length * originalLineHeight +
+      translationGap +
+      translationLines.length * translationLineHeight;
+  };
+
+  measure();
+  while (totalHeight > availableHeight && originalFontSize > minOriginalFontSize) {
+    originalFontSize = Math.max(minOriginalFontSize, originalFontSize - 2 * g.unit);
+    measure();
   }
 
-  if (totalHeight > availableHeight) {
-    const ratio = Math.max(0.62, availableHeight / totalHeight);
+  // Hard safety fallback for unusually long lyric/translation pairs.
+  if (totalHeight > availableHeight && totalHeight > 0) {
+    const ratio = Math.max(0.72, availableHeight / totalHeight);
     originalFontSize *= ratio;
     translationFontSize *= ratio;
-    ctx.font = `${originalWeight} ${originalFontSize}px ${FONT_STACK}`;
-    originalLines = wrapText(ctx, original, lyricMaxWidth);
-    ctx.font = `400 ${translationFontSize}px ${FONT_STACK}`;
-    translationLines = translation ? wrapText(ctx, translation, lyricMaxWidth) : [];
-    const originalLineHeight = originalFontSize * 1.28;
-    const translationLineHeight = translationFontSize * 1.32;
-    const blockGap = translationLines.length > 0 && originalLines.length > 0 ? 18 * g.unit : 0;
-    totalHeight = originalLines.length * originalLineHeight + blockGap + translationLines.length * translationLineHeight;
+    measure();
   }
 
-  const originalLineHeight = originalFontSize * 1.28;
-  const translationLineHeight = translationFontSize * 1.32;
-  const blockGap = translationLines.length > 0 && originalLines.length > 0 ? 20 * g.unit : 0;
-  totalHeight = originalLines.length * originalLineHeight + blockGap + translationLines.length * translationLineHeight;
-  let cursorY = panelInnerTop + Math.max(0, (availableHeight - totalHeight) / 2);
+  // Center the complete lyric stack inside the lower safe band, not inside a visual card.
+  let cursorY = safeTop + Math.max(0, (availableHeight - totalHeight) / 2);
+  const floatOffset = (1 - alpha) * 5 * g.unit;
 
   let lyricColor = style.textColor || '#ffffff';
   if (style.autoContrast) lyricColor = getContrastColor(project.theme.backgroundColor);
@@ -284,45 +270,70 @@ export const drawCdBookletPortraitLyrics = (
   if (isFanchant) lyricColor = project.theme.secondaryColor || lyricColor;
 
   ctx.save();
+
+  // Invisible symmetric clipping only prevents overflow; it never draws a box/background.
   ctx.beginPath();
-  ctx.rect(g.lyricPanelLeft + 8 * g.unit, g.lyricPanelTop + 8 * g.unit, panelWidth - 16 * g.unit, panelHeight - 16 * g.unit);
+  ctx.rect(
+    lyricCenterX - maxWidth / 2,
+    safeTop,
+    maxWidth,
+    availableHeight
+  );
   ctx.clip();
-  ctx.globalAlpha = alpha;
+
+  // Do not rely on Canvas textAlign state for Shorts lyrics.
+  // Every line is positioned from its measured pixel width so the visual block
+  // is physically centered on the 1080px canvas in both preview and export.
   ctx.textAlign = 'left';
-  setLetterSpacing(ctx, '0.2px');
+  ctx.textBaseline = 'alphabetic';
+  ctx.globalAlpha = alpha;
   ctx.fillStyle = lyricColor;
   ctx.shadowColor = isFanchant
     ? project.theme.secondaryColor
     : style.glowBlur > 0
       ? style.glowColor
-      : `rgba(0,0,0,${Math.min(0.75, 0.38 * shadowIntensity)})`;
-  ctx.shadowBlur = isFanchant ? 18 * g.unit : style.glowBlur > 0 ? style.glowBlur : 10 * g.unit * shadowIntensity;
+      : `rgba(0,0,0,${Math.min(0.82, 0.50 * shadowIntensity)})`;
+  ctx.shadowBlur = isFanchant
+    ? 16 * g.unit
+    : style.glowBlur > 0
+      ? style.glowBlur
+      : 12 * g.unit * shadowIntensity;
   ctx.font = `${originalWeight} ${originalFontSize}px ${FONT_STACK}`;
+  setLetterSpacing(ctx, '0px');
   if (project.theme.gameMode === 'lyric-mask') ctx.filter = `blur(${18 * g.unit}px)`;
 
-  originalLines.forEach(line => {
-    const baselineY = cursorY + originalFontSize + yFloatOffset;
+  originalLines.forEach((line) => {
+    const baselineY = cursorY + originalFontSize + floatOffset;
+    const lineWidth = ctx.measureText(line).width;
+    const lineX = lyricCenterX - lineWidth / 2;
     if (style.strokeWidth > 0 && !isFanchant) {
       ctx.strokeStyle = style.strokeColor;
       ctx.lineWidth = style.strokeWidth;
-      ctx.strokeText(line, g.lyricTextLeft, baselineY, lyricMaxWidth);
+      ctx.strokeText(line, lineX, baselineY);
     }
-    ctx.fillText(line, g.lyricTextLeft, baselineY, lyricMaxWidth);
+    ctx.fillText(line, lineX, baselineY);
     cursorY += originalLineHeight;
   });
 
   ctx.filter = 'none';
+
   if (translationLines.length > 0) {
-    cursorY += blockGap;
-    ctx.globalAlpha = alpha * 0.76;
-    ctx.fillStyle = style.autoContrast ? lyricColor : 'rgba(255,255,255,0.78)';
+    cursorY += translationGap;
+    ctx.globalAlpha = alpha * 0.70;
+    ctx.fillStyle = style.autoContrast ? lyricColor : 'rgba(255,255,255,0.84)';
+    ctx.shadowColor = `rgba(0,0,0,${Math.min(0.72, 0.40 * shadowIntensity)})`;
     ctx.shadowBlur = 7 * g.unit * shadowIntensity;
-    ctx.font = `400 ${translationFontSize}px ${FONT_STACK}`;
-    translationLines.forEach(line => {
-      const baselineY = cursorY + translationFontSize + yFloatOffset;
-      ctx.fillText(line, g.lyricTextLeft, baselineY, lyricMaxWidth);
+    ctx.font = `500 ${translationFontSize}px ${FONT_STACK}`;
+    setLetterSpacing(ctx, '0.2px');
+
+    translationLines.forEach((line) => {
+      const baselineY = cursorY + translationFontSize + floatOffset;
+      const lineWidth = ctx.measureText(line).width;
+      const lineX = lyricCenterX - lineWidth / 2;
+      ctx.fillText(line, lineX, baselineY);
       cursorY += translationLineHeight;
     });
   }
+
   ctx.restore();
 };
