@@ -382,8 +382,8 @@ const drawLyricFrame = (
     if (preset === 'cd-booklet' && !isVertical) {
       const metadataStackHeight = 208;
       const groupTop = (height - (size + metadataStackHeight)) / 2;
-      cx += Math.cos(absoluteTime * 0.32) * 2.5;
-      cy = groupTop + size / 2 + Math.sin(absoluteTime * 0.42) * 3.5;
+      // Keep the entire left-side CD Booklet information group static.
+      cy = groupTop + size / 2;
     }
     if (cv.align === 'left') cx += size / 2;
     else if (cv.align === 'right') cx -= size / 2;
