@@ -2,8 +2,13 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { ProjectData } from '../types';
 import { renderProjectOffscreen } from '../services/renderEngine';
 import { buildMediaOutputFileName } from '../utils/outputFilename';
-const buildLyricVideoOutputName = (artist: string, title: string, extension: string, isShorts = false) =>
-  buildMediaOutputFileName(artist, title, extension, isShorts);
+const buildLyricVideoOutputName = (
+  artist: string,
+  title: string,
+  extension: string,
+  isShorts = false,
+  language: ProjectData['metadata']['language'] = 'KR'
+) => buildMediaOutputFileName(artist, title, extension, isShorts, language);
 
 // Extended type for internal queue handling
 type QueueItem = ProjectData & { renderId?: string };
@@ -80,7 +85,8 @@ export const RenderQueueProvider: React.FC<{ children: React.ReactNode }> = ({ c
             item.metadata.artist,
             item.metadata.title,
             'mp4',
-            item.theme.aspectRatio === '9:16'
+            item.theme.aspectRatio === '9:16',
+            item.metadata.language
           );
           document.body.appendChild(a);
           a.click();
