@@ -1,3 +1,5 @@
+import { getLanguageLabel, type LanguageType } from './languageDetector';
+
 const sanitizePart = (value: string, fallback: string) => {
   const cleaned = (value || fallback)
     .trim()
@@ -21,20 +23,25 @@ export const buildOutputFileName = (artist: string, title: string, extension: st
 
 /**
  * Filename used for exported videos and images.
- * Normal output: 【繁體中字】aespa｜Lemonade.mp4
- * Shorts output: aespa - Lemonade.mp4
+ * KR: 【韓繁中字】aespa｜Lemonade.mp4
+ * JP: 【日繁中字】Artist｜Title.mp4
+ * EN: 【英繁中字】Artist｜Title.mp4
+ * CN: 【繁中字】Artist｜Title.mp4
+ * Shorts: aespa - Lemonade.mp4
  */
 export const buildMediaOutputFileName = (
   artist: string,
   title: string,
   extension: string,
-  isShorts = false
+  isShorts = false,
+  language: LanguageType = 'KR'
 ) => {
   const cleanArtist = sanitizePart(artist, 'Unknown Artist');
   const cleanTitle = sanitizePart(title, '未命名');
   const cleanExtension = normalizeExtension(extension);
+  const languageLabel = getLanguageLabel(language);
   const baseName = isShorts
     ? `${cleanArtist} - ${cleanTitle}`
-    : `【繁體中字】${cleanArtist}｜${cleanTitle}`;
+    : `【${languageLabel}】${cleanArtist}｜${cleanTitle}`;
   return `${baseName}.${cleanExtension}`;
 };
