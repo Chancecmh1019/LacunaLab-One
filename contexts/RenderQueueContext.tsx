@@ -1,14 +1,9 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { ProjectData } from '../types';
 import { renderProjectOffscreen } from '../services/renderEngine';
-const buildLyricVideoOutputName = (artist: string, title: string, extension: string) => {
-  const sanitize = (value: string, fallback: string) =>
-    (value || fallback).trim().replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ') || fallback;
-  const cleanArtist = sanitize(artist, 'Unknown Artist');
-  const cleanTitle = sanitize(title, '未命名');
-  const cleanExtension = extension.replace(/^\./, '').trim() || 'mp4';
-  return `${cleanArtist} - ${cleanTitle}｜繁體中字翻譯.${cleanExtension}`;
-};
+import { buildMediaOutputFileName } from '../utils/outputFilename';
+const buildLyricVideoOutputName = (artist: string, title: string, extension: string, isShorts = false) =>
+  buildMediaOutputFileName(artist, title, extension, isShorts);
 
 // Extended type for internal queue handling
 type QueueItem = ProjectData & { renderId?: string };
@@ -34,7 +29,7 @@ export const RenderQueueProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const addToQueue = useCallback((project: ProjectData) => {
     // Assign a unique ID for this render instance to distinguish it in the queue
-    const renderId = `${project.id}-${Date.now()}`;
+    const renderId = `${project.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const projectWithId = { ...project, renderId };
     
     setQueue(prev => [...prev, projectWithId]);
@@ -84,7 +79,8 @@ export const RenderQueueProvider: React.FC<{ children: React.ReactNode }> = ({ c
           a.download = buildLyricVideoOutputName(
             item.metadata.artist,
             item.metadata.title,
-            'mp4'
+            'mp4',
+            item.theme.aspectRatio === '9:16'
           );
           document.body.appendChild(a);
           a.click();
