@@ -9,14 +9,9 @@ import { drawCdBookletPortraitHeader, drawCdBookletPortraitLyrics } from '../uti
 import { LAYOUT_PRESETS, FONT_STACK } from '../utils/layoutPresets';
 import { getLanguageLabel, detectLanguageFromLyrics } from '../utils/languageDetector';
 import { useRenderQueue } from '../contexts/RenderQueueContext';
-const buildLyricVideoOutputName = (artist: string, title: string, extension: string) => {
-  const sanitize = (value: string, fallback: string) =>
-    (value || fallback).trim().replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ') || fallback;
-  const cleanArtist = sanitize(artist, 'Unknown Artist');
-  const cleanTitle = sanitize(title, '未命名');
-  const cleanExtension = extension.replace(/^\./, '').trim() || 'mp4';
-  return `${cleanArtist} - ${cleanTitle}｜繁體中字翻譯.${cleanExtension}`;
-};
+import { buildMediaOutputFileName } from '../utils/outputFilename';
+const buildLyricVideoOutputName = (artist: string, title: string, extension: string, isShorts = false) =>
+  buildMediaOutputFileName(artist, title, extension, isShorts);
 
 // ... (Keep existing Type Declarations for VideoEncoder/AudioEncoder/etc) ...
 declare class VideoEncoder {
@@ -72,9 +67,6 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
   const [exportMode, setExportMode] = useState<'fast' | 'compatible'>('fast');
   const [isGeneratingRomanization, setIsGeneratingRomanization] = useState(false);
   const [isGeneratingVocab, setIsGeneratingVocab] = useState(false);
-  
-  // New State for Queue Button
-  const [hasAddedToQueue, setHasAddedToQueue] = useState(false);
   
   // Search Modal State
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -1576,7 +1568,12 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a'); 
             a.href = url; 
-            a.download = buildLyricVideoOutputName(project.metadata.artist, project.metadata.title, ext);
+            a.download = buildLyricVideoOutputName(
+              project.metadata.artist,
+              project.metadata.title,
+              ext,
+              project.theme.aspectRatio === '9:16'
+            );
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             setIsExporting(false); setExportProgress(0); setIsPlaying(false);
         };
@@ -1740,8 +1737,6 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
   };
 
   const handleAddToQueue = () => {
-    if (hasAddedToQueue) return;
-    setHasAddedToQueue(true);
     addToQueue(project);
   };
 
@@ -2131,10 +2126,9 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
               <div className="flex gap-2">
                 <button 
                     onClick={handleAddToQueue}
-                    disabled={hasAddedToQueue}
-                    className={`flex-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all active:scale-[0.98] border ${hasAddedToQueue ? 'border-neutral-700/50 bg-neutral-800/50 text-neutral-500 cursor-not-allowed' : 'border-amber-600/50 bg-amber-900/30 text-amber-200 hover:bg-amber-800/40 shadow-lg shadow-amber-900/20'}`}
+                    className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all active:scale-[0.98] border border-amber-600/50 bg-amber-900/30 text-amber-200 hover:bg-amber-800/40 shadow-lg shadow-amber-900/20"
                 >
-                    <div className="flex items-center gap-1"><ListVideo size={12} className="sm:w-[14px] sm:h-[14px]"/> <span className="hidden sm:inline">{hasAddedToQueue ? "已加入" : "加入排程"}</span><span className="sm:hidden">{hasAddedToQueue ? "已加入" : "排程"}</span></div>
+                    <div className="flex items-center gap-1"><ListVideo size={12} className="sm:w-[14px] sm:h-[14px]"/> <span className="hidden sm:inline">加入排程</span><span className="sm:hidden">排程</span></div>
                     <span className="text-[9px] sm:text-[10px] opacity-60 font-normal hidden sm:block">批次背景渲染</span>
                 </button>
 

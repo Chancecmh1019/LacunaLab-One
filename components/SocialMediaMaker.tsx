@@ -5,7 +5,7 @@ import { Share2, Type, AtSign, Download, Copy, Loader2, Wand2, Stamp, MoveHorizo
 import { generateSocialPosts } from '../services/geminiService';
 import { wrapText, drawRoundedRect } from '../utils/canvasUtils';
 import { FONT_STACK } from '../utils/layoutPresets';
-import { buildOutputFileName } from '../utils/outputFilename';
+import { buildMediaOutputFileName } from '../utils/outputFilename';
 
 interface Props {
     project: ProjectData;
@@ -727,7 +727,7 @@ const SocialMediaMaker: React.FC<Props> = ({ project, onUpdate }) => {
     const handleDownloadImage = () => {
         if (!canvasRef.current) return;
         const link = document.createElement('a');
-        link.download = buildOutputFileName(project.metadata.artist, project.metadata.title, 'png');
+        link.download = buildMediaOutputFileName(project.metadata.artist, project.metadata.title, 'png');
         link.href = canvasRef.current.toDataURL('image/png');
         link.click();
     };

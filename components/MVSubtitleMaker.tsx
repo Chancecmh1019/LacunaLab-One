@@ -7,7 +7,7 @@ import { wrapText } from '../utils/canvasUtils';
 import { useRenderQueue } from '../contexts/RenderQueueContext';
 import { renderProjectOffscreen } from '../services/renderEngine';
 import { FONT_STACK } from '../utils/layoutPresets';
-import { buildOutputFileName } from '../utils/outputFilename';
+import { buildMediaOutputFileName } from '../utils/outputFilename';
 
 interface Props {
   project: ProjectData;
@@ -33,7 +33,6 @@ const MVSubtitleMaker: React.FC<Props> = ({ project, onUpdate }) => {
   const [offlineProgress, setOfflineProgress] = useState(0);
   const [cinemaMode, setCinemaMode] = useState(false); // Default: False
   const [fontsLoaded, setFontsLoaded] = useState(false);
-  const [hasAddedToQueue, setHasAddedToQueue] = useState(false);
   
   const [videoDim, setVideoDim] = useState({ width: 1920, height: 1080 });
 
@@ -398,10 +397,11 @@ const MVSubtitleMaker: React.FC<Props> = ({ project, onUpdate }) => {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = buildOutputFileName(
+          a.download = buildMediaOutputFileName(
             project.metadata.artist,
             project.metadata.title,
-            'mp4'
+            'mp4',
+            project.theme.aspectRatio === '9:16'
           );
           document.body.appendChild(a);
           a.click();
@@ -416,8 +416,6 @@ const MVSubtitleMaker: React.FC<Props> = ({ project, onUpdate }) => {
 
   // Add to Queue
   const handleAddToQueue = () => {
-      if (hasAddedToQueue) return;
-      setHasAddedToQueue(true);
       addToQueue(project);
   };
 
@@ -741,15 +739,11 @@ const MVSubtitleMaker: React.FC<Props> = ({ project, onUpdate }) => {
               <div className="space-y-2">
                   <button 
                     onClick={handleAddToQueue}
-                    disabled={!videoFile || isRendering || isOfflineRendering || hasAddedToQueue}
-                    className={`w-full py-3 border rounded-xl font-bold flex items-center justify-center gap-2 transition-all font-serif-tc ${
-                        hasAddedToQueue 
-                            ? 'bg-neutral-800/50 border-neutral-700/50 text-neutral-500 cursor-not-allowed' 
-                            : 'bg-gradient-to-r from-amber-900/40 to-amber-800/30 border-amber-600/50 text-amber-200 hover:from-amber-800/50 hover:to-amber-700/40 shadow-lg shadow-amber-900/20'
-                    }`}
+                    disabled={!videoFile || isRendering || isOfflineRendering}
+                    className="w-full py-3 border rounded-xl font-bold flex items-center justify-center gap-2 transition-all font-serif-tc bg-gradient-to-r from-amber-900/40 to-amber-800/30 border-amber-600/50 text-amber-200 hover:from-amber-800/50 hover:to-amber-700/40 shadow-lg shadow-amber-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                       <ListVideo size={18}/> 
-                      <span>{hasAddedToQueue ? "已加入排程" : "加入排程"}</span>
+                      <span>加入排程</span>
                   </button>
 
                   <button 

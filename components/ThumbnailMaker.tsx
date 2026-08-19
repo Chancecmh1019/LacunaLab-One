@@ -5,7 +5,7 @@ import { Download, Layout, Type, Minus, Plus, Aperture, Stamp, MoveHorizontal, M
 import { drawRoundedRect, wrapText } from '../utils/canvasUtils';
 import { FONT_STACK } from '../utils/layoutPresets';
 import { getLanguageLabel } from '../utils/languageDetector';
-import { buildOutputFileName } from '../utils/outputFilename';
+import { buildMediaOutputFileName } from '../utils/outputFilename';
 
 interface Props {
   project: ProjectData;
@@ -1033,7 +1033,7 @@ const ThumbnailMaker: React.FC<Props> = ({ project, onUpdate }) => {
 
   const download = () => {
     const link = document.createElement('a');
-    link.download = buildOutputFileName(project.metadata.artist, project.metadata.title, 'png');
+    link.download = buildMediaOutputFileName(project.metadata.artist, project.metadata.title, 'png');
     link.href = canvasRef.current!.toDataURL('image/png', 1.0);
     link.click();
   };
