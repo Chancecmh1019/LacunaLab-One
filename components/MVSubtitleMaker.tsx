@@ -8,6 +8,7 @@ import { useRenderQueue } from '../contexts/RenderQueueContext';
 import { renderProjectOffscreen } from '../services/renderEngine';
 import { FONT_STACK } from '../utils/layoutPresets';
 import { buildMediaOutputFileName } from '../utils/outputFilename';
+import { detectLanguageFromLyrics } from '../utils/languageDetector';
 
 interface Props {
   project: ProjectData;
@@ -136,8 +137,14 @@ const MVSubtitleMaker: React.FC<Props> = ({ project, onUpdate }) => {
           const text = ev.target?.result as string;
           const parsed = parseSRT(text);
           setSubtitles(parsed);
-          // Sync with main project data
-          if(onUpdate) onUpdate({ lyrics: parsed });
+          // Sync with main project data and detect source language for filenames
+          if (onUpdate) {
+              const detectedLanguage = detectLanguageFromLyrics(parsed);
+              onUpdate({
+                  lyrics: parsed,
+                  metadata: { ...project.metadata, language: detectedLanguage }
+              });
+          }
       };
       reader.readAsText(file);
   };
@@ -401,7 +408,8 @@ const MVSubtitleMaker: React.FC<Props> = ({ project, onUpdate }) => {
             project.metadata.artist,
             project.metadata.title,
             'mp4',
-            project.theme.aspectRatio === '9:16'
+            project.theme.aspectRatio === '9:16',
+            project.metadata.language
           );
           document.body.appendChild(a);
           a.click();

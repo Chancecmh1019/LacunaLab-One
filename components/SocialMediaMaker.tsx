@@ -727,7 +727,13 @@ const SocialMediaMaker: React.FC<Props> = ({ project, onUpdate }) => {
     const handleDownloadImage = () => {
         if (!canvasRef.current) return;
         const link = document.createElement('a');
-        link.download = buildMediaOutputFileName(project.metadata.artist, project.metadata.title, 'png');
+        link.download = buildMediaOutputFileName(
+            project.metadata.artist,
+            project.metadata.title,
+            'png',
+            false,
+            project.metadata.language
+        );
         link.href = canvasRef.current.toDataURL('image/png');
         link.click();
     };

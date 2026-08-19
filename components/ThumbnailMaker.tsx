@@ -1033,7 +1033,13 @@ const ThumbnailMaker: React.FC<Props> = ({ project, onUpdate }) => {
 
   const download = () => {
     const link = document.createElement('a');
-    link.download = buildMediaOutputFileName(project.metadata.artist, project.metadata.title, 'png');
+    link.download = buildMediaOutputFileName(
+      project.metadata.artist,
+      project.metadata.title,
+      'png',
+      false,
+      project.metadata.language
+    );
     link.href = canvasRef.current!.toDataURL('image/png', 1.0);
     link.click();
   };

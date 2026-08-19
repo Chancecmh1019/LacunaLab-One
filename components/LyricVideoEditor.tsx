@@ -10,8 +10,13 @@ import { LAYOUT_PRESETS, FONT_STACK } from '../utils/layoutPresets';
 import { getLanguageLabel, detectLanguageFromLyrics } from '../utils/languageDetector';
 import { useRenderQueue } from '../contexts/RenderQueueContext';
 import { buildMediaOutputFileName } from '../utils/outputFilename';
-const buildLyricVideoOutputName = (artist: string, title: string, extension: string, isShorts = false) =>
-  buildMediaOutputFileName(artist, title, extension, isShorts);
+const buildLyricVideoOutputName = (
+  artist: string,
+  title: string,
+  extension: string,
+  isShorts = false,
+  language: ProjectData['metadata']['language'] = 'KR'
+) => buildMediaOutputFileName(artist, title, extension, isShorts, language);
 
 // ... (Keep existing Type Declarations for VideoEncoder/AudioEncoder/etc) ...
 declare class VideoEncoder {
@@ -1572,7 +1577,8 @@ const LyricVideoEditor: React.FC<Props> = ({ project, onUpdate }) => {
               project.metadata.artist,
               project.metadata.title,
               ext,
-              project.theme.aspectRatio === '9:16'
+              project.theme.aspectRatio === '9:16',
+              project.metadata.language
             );
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             setIsExporting(false); setExportProgress(0); setIsPlaying(false);
