@@ -59,9 +59,6 @@ If there is any copyright issue, please contact us for removal.
             language === 'JP' ? '日文歌曲' : null,
             language === 'EN' ? 'Pop' : null,
             language === 'EN' ? '英文歌曲' : null,
-            'ChangeMusicEntertainment',
-            '泉聚',
-            '泉聚音樂',
             '歌詞翻譯',
             '中文翻譯',
             '中字',
@@ -72,7 +69,6 @@ If there is any copyright issue, please contact us for removal.
             '音樂',
             'Music',
             '翻譯',
-            'Translation'
         ].filter(Boolean) as string[];
         
         setHashtags(defaultTags);
