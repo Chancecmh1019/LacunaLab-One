@@ -29,15 +29,8 @@ const VideoDescriptionEditor: React.FC<Props> = ({ project, onUpdate }) => {
         const subtitleType = language === 'CN' ? '中文字幕' : '繁體中文字幕';
         
         const defaultDesc = `歌曲資訊 | Song Information
-• 歌名 Title：${title}
-• 歌手 Artist：${artist}${album ? `\n• 專輯 Album：${album}` : ''}
-
-訂閱支持 | Subscribe & Support
-👍 按讚 Like
-💬 留言分享您的想法 Comment
-🔔 訂閱並開啟小鈴鐺 Subscribe & Turn on Notifications
-📤 分享給更多朋友 Share with Friends
-您的每一個支持都是我們持續創作的動力！
+• 歌曲名稱 Title：${title}
+• 歌手名稱 Artist：${artist}${album ? `\n• 專輯名稱 Album：${album}` : ''}
 
 ⚠️ 版權聲明 | Copyright Notice
 本影片僅供學習交流使用，所有音樂版權歸原作者及唱片公司所有。
@@ -46,19 +39,7 @@ All rights reserved to the original artist and record label.
 This video is for educational and entertainment purposes only.
 If there is any copyright issue, please contact us for removal.
 
-聯絡我們 | Contact Us
-商業合作 Business Inquiries：changeent.official@gmail.com
-
-更多平台 | Follow Us
-• ODYSEE：@ChangeEnt.official
-• Instagram：@changeent.official
-• Threads：changeent.official
-
-相關連結 | More Link
-• 許願連結：https://forms.gle/nSNkye4jmsBv64Qd7
-• 許願進度追蹤連結：https://docs.google.com/spreadsheets/d/1sk6AfRQis-uoSsl-2WMFfogAm2L-rMmR6dRIUAZdM2g/edit
-
-© ${new Date().getFullYear()} Change Music Entertainment
+© ${new Date().getFullYear()} LacunaLab Studio
 感謝您的收看！Thanks for watching!`;
         
         setDescription(defaultDesc);
