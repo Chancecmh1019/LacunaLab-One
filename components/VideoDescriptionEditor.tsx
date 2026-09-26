@@ -29,8 +29,8 @@ const VideoDescriptionEditor: React.FC<Props> = ({ project, onUpdate }) => {
         const subtitleType = language === 'CN' ? '中文字幕' : '繁體中文字幕';
         
         const defaultDesc = `歌曲資訊 | Song Information
-• 歌曲名稱 Title：${title}
-• 歌手名稱 Artist：${artist}${album ? `\n• 專輯名稱 Album：${album}` : ''}
+• 歌曲名稱：${title}
+• 歌手名稱：${artist}${album ? `\n• 專輯名稱：${album}` : ''}
 
 ⚠️ 版權聲明 | Copyright Notice
 本影片僅供學習交流使用，所有音樂版權歸原作者及唱片公司所有。
